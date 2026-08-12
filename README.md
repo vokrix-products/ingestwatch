@@ -69,3 +69,5 @@ Vercel Project: ingestwatch
 Railway Service ID: b916b524-ad1e-4673-b78e-e209b7e0554b
 Railway: ingestwatch
 Cloudflare: ingestwatch.vokrix.co
+
+Landing: https://vokrix.co/ingestwatch
