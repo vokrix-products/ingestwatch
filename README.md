@@ -62,3 +62,8 @@ python3 run_tests.py
 - processor.py - file-to-records normalization engine
 - run_demo.py - zero-argument demo that prints JSON
 - run_tests.py - unittest coverage for CSV, plain text, and Excel paths
+
+## Live URLs
+Dashboard: https://ingestwatch.vokrix.co
+Vercel Project: ingestwatch
+Railway Service ID: b916b524-ad1e-4673-b78e-e209b7e0554b
