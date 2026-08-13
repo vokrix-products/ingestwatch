@@ -2,9 +2,15 @@ import csv
 import io
 import json
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from processor import STATUS_VALUES, process_file
 from monitor import process_sources
+
+
+def ts(hours_from_now):
+    """UTC timestamp relative to now, e.g. ts(-24) = 24h ago."""
+    return (datetime.now(timezone.utc) + timedelta(hours=hours_from_now)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class ProcessorTests(unittest.TestCase):
@@ -75,8 +81,8 @@ class MonitorTests(unittest.TestCase):
                     "source_name": "stripe-import",
                     "workflow_id": "ingest.yml",
                     "schedule": "0 3 * * *",
-                    "last_run_at": "2026-01-15T03:00:00Z",
-                    "next_run_at": "2026-01-16T03:00:00Z",
+                    "last_run_at": ts(-24),
+                    "next_run_at": ts(24),
                     "status": "success",
                     "fetched_count": 120,
                     "scored_count": 118,
@@ -90,7 +96,7 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(rec["title"], "stripe-import")
         self.assertEqual(rec["status"], "valid:good")
         self.assertEqual(rec["fetched_count"], 120)
-        self.assertEqual(rec.get("due_date"), "2026-01-16")
+        self.assertEqual(rec.get("due_date"), (datetime.now(timezone.utc) + timedelta(hours=24)).date().isoformat())
 
     def test_manifest_failed_source(self):
         manifest = {"sources": [{"source_name": "sync", "status": "failed", "error_message": "timeout"}]}
@@ -108,12 +114,15 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(records[0]["status"], "missing:critical")
 
     def test_manifest_stale_source(self):
-        manifest = {"sources": [{"source_name": "old", "schedule": "0 3 * * *", "last_run_at": "2020-01-01T03:00:00Z", "next_run_at": "2020-01-02T03:00:00Z"}]}
+        manifest = {"sources": [{"source_name": "old", "schedule": "0 3 * * *", "last_run_at": ts(-24 * 30), "next_run_at": ts(-24 * 30 + 24)}]}
         records = process_sources(json.dumps(manifest))
         self.assertEqual(records[0]["status"], "expired:warning")
 
     def test_manifest_csv(self):
-        data = "source_name,status,fetched_count,scored_count,qualified_count,last_run_at,next_run_at\nstripe-import,success,120,118,115,2026-01-15T03:00:00Z,2026-01-16T03:00:00Z\n"
+        data = (
+            "source_name,status,fetched_count,scored_count,qualified_count,last_run_at,next_run_at\n"
+            f"stripe-import,success,120,118,115,{ts(-24)},{ts(24)}\n"
+        )
         records = process_sources(data)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["title"], "stripe-import")
