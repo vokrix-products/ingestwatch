@@ -35,9 +35,9 @@ function Trend({ current, previous }: { current: number; previous: number }) {
   )
 }
 
-// PRODUCT_CUSTOMIZE: card titles/icons below describe generic record
-// tracking. Rename "Records" / "Needs Attention" to match this product's
-// domain (e.g. "Certificates" / "Expired").
+// PRODUCT_CUSTOMIZE: card titles below describe generic record
+// tracking. IngestWatch monitors scheduled ingestion sources, so the
+// cards read as source health rather than generic record counts.
 export function Dashboard() {
   const { data, isLoading } = useDashboardStats()
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(false)
@@ -79,7 +79,7 @@ export function Dashboard() {
           </div>
         )}
         <div className='mb-2 flex items-center justify-between space-y-2'>
-          <h1 className='text-2xl font-bold tracking-tight'>Dashboard</h1>
+          <h1 className='text-2xl font-bold tracking-tight'>Ingestion Monitor</h1>
         </div>
         <div className='space-y-4'>
           <JobsCard />
@@ -87,7 +87,7 @@ export function Dashboard() {
           <div className='grid gap-4 sm:grid-cols-3'>
             <Card>
               <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Total Records</CardTitle>
+                <CardTitle className='text-sm font-medium'>Sources Monitored</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -121,7 +121,7 @@ export function Dashboard() {
             </Card>
             <Card>
               <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
-                <CardTitle className='text-sm font-medium'>Added This Week</CardTitle>
+                <CardTitle className='text-sm font-medium'>Runs This Week</CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -140,7 +140,7 @@ export function Dashboard() {
           <div className='grid grid-cols-1 gap-4 lg:grid-cols-7'>
             <Card className='col-span-1 lg:col-span-4'>
               <CardHeader>
-                <CardTitle>Status Breakdown</CardTitle>
+                <CardTitle>Source Health</CardTitle>
               </CardHeader>
               <CardContent className='ps-2'>
                 <Overview />
@@ -149,19 +149,17 @@ export function Dashboard() {
             <Card className='col-span-1 lg:col-span-3'>
               <CardHeader>
                 <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest records added</CardDescription>
+                <CardDescription>Latest source runs and updates</CardDescription>
               </CardHeader>
               <CardContent>
                 <RecentActivity />
               </CardContent>
             </Card>
           </div>
-          {/* PRODUCT_CUSTOMIZE: remove this card for products where records
-              have no expiration/renewal/deadline dates */}
           <Card>
             <CardHeader>
-              <CardTitle>Upcoming Expirations</CardTitle>
-              <CardDescription>Records expiring in the next 90 days</CardDescription>
+              <CardTitle>Upcoming Runs</CardTitle>
+              <CardDescription>Sources with a scheduled run in the next 90 days</CardDescription>
             </CardHeader>
             <CardContent>
               <UpcomingExpirations />

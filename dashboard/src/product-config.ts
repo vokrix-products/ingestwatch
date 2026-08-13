@@ -5,13 +5,13 @@ import { ListTodo, TriangleAlert, Briefcase, type LucideIcon } from 'lucide-reac
 // 'monitor'    — no upload, schedule-driven; tasks table shows exceptions
 // 'report'     — upload + single report card per run, no tasks table
 // 'dispatch'   — no upload, create-driven; tasks table shows active jobs
-export const PRODUCT_ARCHETYPE = ((import.meta.env.VITE_PRODUCT_ARCHETYPE as string) ?? 'extraction') as 'extraction' | 'monitor' | 'report' | 'dispatch'
+export const PRODUCT_ARCHETYPE = ((import.meta.env.VITE_PRODUCT_ARCHETYPE as string) ?? 'monitor') as 'extraction' | 'monitor' | 'report' | 'dispatch'
 
 
 // PRODUCT_CUSTOMIZE: set these per product.
-export const RECORDS_LABEL = (import.meta.env.VITE_RECORDS_LABEL as string) ?? 'Records'           // sidebar + page heading: 'Contracts', 'Claims', 'Invoices'
-export const RECORDS_SUBTITLE = (import.meta.env.VITE_RECORDS_SUBTITLE as string) ?? 'All processed records'  // page subtitle
-export const FILTER_PLACEHOLDER = (import.meta.env.VITE_FILTER_PLACEHOLDER as string) ?? 'Search...'  // search box placeholder
+export const RECORDS_LABEL = (import.meta.env.VITE_RECORDS_LABEL as string) ?? 'Sources'           // sidebar + page heading: 'Contracts', 'Claims', 'Invoices'
+export const RECORDS_SUBTITLE = (import.meta.env.VITE_RECORDS_SUBTITLE as string) ?? 'Ingestion sources under watch'  // page subtitle
+export const FILTER_PLACEHOLDER = (import.meta.env.VITE_FILTER_PLACEHOLDER as string) ?? 'Search sources...'  // search box placeholder
 export const SHOW_CREATE_BUTTON = false           // true only for dispatch archetype
 export const SHOW_IMPORT_BUTTON = false           // true only if CSV import is relevant
 
