@@ -1,8 +1,15 @@
 import csv
 import io
 import json
+from datetime import datetime, timedelta, timezone
+
 from processor import process_file
 from monitor import process_sources
+
+
+def ts(hours_from_now):
+    """UTC timestamp relative to now, e.g. ts(-24) = 24h ago."""
+    return (datetime.now(timezone.utc) + timedelta(hours=hours_from_now)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def file_demo():
@@ -29,8 +36,8 @@ def monitor_demo():
                 "repo_owner": "acme",
                 "workflow_id": "ingest.yml",
                 "schedule": "0 3 * * *",
-                "last_run_at": "2026-01-15T03:00:00Z",
-                "next_run_at": "2026-01-16T03:00:00Z",
+                "last_run_at": ts(-24),
+                "next_run_at": ts(24),
                 "status": "success",
                 "fetched_count": 120,
                 "scored_count": 118,
@@ -40,8 +47,8 @@ def monitor_demo():
                 "source_name": "salesforce-sync",
                 "workflow_id": "sync.yml",
                 "schedule": "0 */6 * * *",
-                "last_run_at": "2026-01-10T06:00:00Z",
-                "next_run_at": "2026-01-10T12:00:00Z",
+                "last_run_at": ts(-24),
+                "next_run_at": ts(-18),
                 "status": "success",
                 "fetched_count": 0,
             },
@@ -50,7 +57,7 @@ def monitor_demo():
                 "workflow_id": "contacts.yml",
                 "schedule": "0 4 * * 1",
                 "last_run_at": None,
-                "next_run_at": "2026-01-12T04:00:00Z",
+                "next_run_at": ts(-1),
             },
         ]
     }
