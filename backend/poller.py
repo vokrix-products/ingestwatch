@@ -5,14 +5,11 @@ from datetime import datetime, timezone
 
 import requests
 import processor
+import monitor
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 PRODUCT_ID = os.environ["PRODUCT_ID"]
-try:
-    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-except Exception:
-    ANTHROPIC_API_KEY = ""
 SUPABASE_REST = f"{SUPABASE_URL}/rest/v1"
 
 
@@ -69,6 +66,68 @@ def insert_notification(product_id, customer_id, title, body, ntype):
         pass
 
 
+def _insert_records(results, customer_id, input_path):
+    rec_url = f"{SUPABASE_REST}/records"
+    resp = requests.post(rec_url, headers=get_headers(), json=results, timeout=60)
+    resp.raise_for_status()
+
+
+def process_job(job):
+    job_id = job.get("id")
+    customer_id = job.get("customer_id")
+    input_path = job.get("input_file_path", "")
+    job_type = job.get("job_type") or "process_upload"
+    try:
+        file_bytes = download_file("uploads", input_path)
+        if job_type == "process_sources":
+            records = monitor.process_sources(file_bytes)
+            noun = "sources"
+        else:
+            records = processor.process_file(file_bytes)
+            noun = "records"
+        if not records:
+            raise ValueError(f"No {noun} extracted")
+        results = []
+        for rec in records:
+            row = {
+                "product_id": PRODUCT_ID,
+                "customer_id": customer_id,
+                "title": rec.get("title") or "Untitled",
+                "status": rec.get("status") or "valid:good",
+                "details": rec,
+                "source_file_path": input_path,
+            }
+            if rec.get("due_date"):
+                row["due_date"] = rec["due_date"]
+            results.append(row)
+        _insert_records(results, customer_id, input_path)
+        result_bytes = json.dumps(results, indent=2).encode("utf-8")
+        output_path = upload_result(job_id, result_bytes, "result.json")
+        now = datetime.now(timezone.utc).isoformat()
+        update_job(job_id, {
+            "status": "completed",
+            "output_file_path": output_path,
+            "result_summary": f"Processed {len(results)} {noun}",
+            "completed_at": now,
+        })
+        insert_notification(PRODUCT_ID, customer_id, "Processing complete", "Your upload has been processed successfully.", "success")
+        if job_type == "process_sources":
+            critical = [r.get("title") for r in results if str(r.get("status", "")).endswith(":critical")]
+            if critical:
+                insert_notification(PRODUCT_ID, customer_id, "Sources need attention", "Critical: " + ", ".join(critical[:5]), "error")
+    except Exception as exc:
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            update_job(job_id, {
+                "status": "failed",
+                "result_summary": str(exc)[:500],
+                "completed_at": now,
+            })
+        except Exception:
+            pass
+        insert_notification(PRODUCT_ID, customer_id, "Processing failed", "There was an error processing your upload.", "error")
+
+
 def poll():
     while True:
         try:
@@ -76,7 +135,6 @@ def poll():
             params = {
                 "select": "*",
                 "status": "eq.pending",
-                "job_type": "eq.process_upload",
                 "product_id": f"eq.{PRODUCT_ID}",
                 "order": "created_at.asc",
                 "limit": "1",
@@ -85,51 +143,7 @@ def poll():
             resp.raise_for_status()
             jobs = resp.json()
             for job in jobs:
-                job_id = job.get("id")
-                customer_id = job.get("customer_id")
-                input_path = job.get("input_file_path", "")
-                try:
-                    file_bytes = download_file("uploads", input_path)
-                    records = processor.process_file(file_bytes)
-                    if not records:
-                        raise ValueError("No records extracted")
-                    results = []
-                    for rec in records:
-                        row = {
-                            "product_id": PRODUCT_ID,
-                            "customer_id": customer_id,
-                            "title": rec.get("title") or "Untitled",
-                            "status": rec.get("status") or "valid:good",
-                            "details": rec,
-                            "source_file_path": input_path,
-                        }
-                        if rec.get("due_date"):
-                            row["due_date"] = rec["due_date"]
-                        results.append(row)
-                    rec_url = f"{SUPABASE_REST}/records"
-                    resp2 = requests.post(rec_url, headers=get_headers(), json=results, timeout=60)
-                    resp2.raise_for_status()
-                    result_bytes = json.dumps(results, indent=2).encode("utf-8")
-                    output_path = upload_result(job_id, result_bytes, "result.json")
-                    now = datetime.now(timezone.utc).isoformat()
-                    update_job(job_id, {
-                        "status": "completed",
-                        "output_file_path": output_path,
-                        "result_summary": f"Processed {len(results)} records",
-                        "completed_at": now,
-                    })
-                    insert_notification(PRODUCT_ID, customer_id, "Processing complete", "Your upload has been processed successfully.", "success")
-                except Exception as exc:
-                    now = datetime.now(timezone.utc).isoformat()
-                    try:
-                        update_job(job_id, {
-                            "status": "failed",
-                            "result_summary": str(exc)[:500],
-                            "completed_at": now,
-                        })
-                    except Exception:
-                        pass
-                    insert_notification(PRODUCT_ID, customer_id, "Processing failed", "There was an error processing your upload.", "error")
+                process_job(job)
         except Exception:
             pass
         time.sleep(60)
