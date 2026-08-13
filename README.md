@@ -41,6 +41,8 @@ Supplier: Acme Corp
 Status: failed
 Due Date: 2026-01-20
 
+The normalizer also handles common business headers (Company, Organization, Business, Client, Title, Record, ...), falls back to the first non-empty column when no known title header exists, and groups plain-text blocks so a bare name line becomes the title of the key:value block that follows it.
+
 ## Requirements
 
 Install dependencies with:
