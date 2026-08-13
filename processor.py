@@ -18,18 +18,47 @@ STATUS_VALUES = [
     "failed:critical",
 ]
 
+# Known title-bearing column names. _pick_field also matches keys after
+# stripping spaces/punctuation, so entries include normalized aliases
+# (e.g. "companyname" matches "Company Name").
 TITLE_FIELDS = [
     "source_name", "source", "name", "supplier", "vendor_name",
     "vendor", "employee_name", "employee", "patient_name", "patient",
     "contract_party", "client_name", "customer_name", "repo_name",
-    "account_name"
+    "account_name",
+    "company", "company_name", "companyname",
+    "organization", "organisation", "organization_name", "organisation_name",
+    "organizationname", "organisationname",
+    "business", "business_name", "businessname",
+    "name_of_business", "nameofbusiness",
+    "client", "clientname", "customer", "customername",
+    "title", "record_title", "recordtitle", "record", "record_name",
+    "recordname", "name_of_record", "nameofrecord",
+    "item", "item_name", "itemname",
+    "product", "product_name", "productname",
+    "project", "project_name", "projectname",
+    "contract", "contract_name", "contractname",
+    "document", "document_name", "documentname",
+    "entity", "entity_name", "entityname", "legal_name", "legalname",
+    "trading_name", "tradingname", "filename", "file_name",
 ]
 
-STATUS_FIELDS = ["status", "run_status", "pipeline_status", "source_status"]
-EMPTY_RUN_FIELDS = ["empty_run", "is_empty", "empty"]
-FETCHED_COUNT_FIELDS = ["fetched_count", "fetch_count", "fetched"]
-ERROR_FIELDS = ["error_message", "error", "run_error", "message"]
-DATE_FIELDS = ["due_date", "next_run_at", "date_due", "due", "deadline", "expires_at", "expiry_date"]
+STATUS_FIELDS = [
+    "status", "run_status", "pipeline_status", "source_status",
+    "runstatus", "pipelinestatus", "sourcestatus",
+    "current_status", "currentstatus",
+]
+EMPTY_RUN_FIELDS = ["empty_run", "is_empty", "empty", "emptyrun", "isempty"]
+FETCHED_COUNT_FIELDS = [
+    "fetched_count", "fetch_count", "fetched", "fetchedcount", "fetchcount",
+]
+ERROR_FIELDS = ["error_message", "error", "run_error", "message", "errormessage", "runerror"]
+DATE_FIELDS = [
+    "due_date", "next_run_at", "date_due", "due", "deadline",
+    "expires_at", "expiry_date", "duedate", "nextrunat", "expirydate",
+    "expiresat", "completed_at", "created_at", "updated_at",
+    "completedat", "createdat", "updatedat",
+]
 
 _STATUS_SYNONYMS = {
     "ok": "valid:good", "success": "valid:good", "successful": "valid:good",
@@ -40,6 +69,27 @@ _STATUS_SYNONYMS = {
     "expired": "expired:warning", "overdue": "expired:warning",
     "empty": "empty:warning", "blank": "empty:warning",
     "flagged": "flagged:warning", "warning": "flagged:warning",
+}
+
+
+# Keys that should never be used as a title fallback source.
+_SKIP_TITLE_KEYS = {
+    "status", "runstatus", "pipelinestatus", "sourcestatus", "currentstatus",
+    "state", "result", "results",
+    "duedate", "nextrunat", "datedue", "due", "deadline", "expiresat",
+    "expirydate", "date", "createdat", "updatedat", "completedat",
+    "timestamp", "time",
+    "fetchedcount", "fetchcount", "fetched", "count", "total", "rowcount",
+    "recordcount", "numrecords", "numrows",
+    "errormessage", "error", "runerror", "message", "notes", "note",
+    "comment", "comments", "description", "details", "summary",
+    "id", "uuid", "recordid", "jobid", "customerid", "productid", "userid",
+    "sourcefilepath", "filepath", "bucket", "path", "url", "link",
+    "filename", "file",
+    "empty", "isempty", "emptyrun", "type", "category", "categoryname",
+    "priority", "severity", "owner", "assignee", "assignedto",
+    "department", "team", "location", "region",
+    "createdby", "updatedby", "modifiedat", "modifiedby", "publishedat",
 }
 
 
@@ -97,6 +147,25 @@ def _pick_field(row, fields):
     return None
 
 
+def _fallback_title(row):
+    """Pick the first non-empty cell that is not metadata/status/date noise."""
+    for key, value in row.items():
+        if not key or _skip_title_key(key):
+            continue
+        v = str(value).strip() if value is not None else ""
+        if not v:
+            continue
+        if re.fullmatch(r"\d{4}[-/]\d{1,2}[-/]\d{1,2}", v):
+            continue
+        return v[:200]
+    return None
+
+
+def _skip_title_key(key):
+    normalized = re.sub(r"[^a-z]", "", key.lower())
+    return normalized in _SKIP_TITLE_KEYS
+
+
 def _records_from_dicts(rows):
     records = []
     for row in rows:
@@ -107,6 +176,8 @@ def _records_from_dicts(rows):
         due_raw = _pick_field(row, DATE_FIELDS)
         status = _normalize_status(status_raw)
         due = _normalize_date(due_raw)
+        if not title:
+            title = _fallback_title(row)
         record = {"title": str(title) if title else None, "status": status}
         if due:
             record["due_date"] = due
@@ -119,7 +190,7 @@ def _records_from_dicts(rows):
 
 def _parse_csv(text):
     reader = csv.DictReader(io.StringIO(text))
-    rows = [row for row in reader]
+    rows = [row for row in reader if row and any((v or "").strip() for v in row.values())]
     if not rows:
         return []
     return _records_from_dicts(rows)
@@ -129,17 +200,33 @@ def _parse_plain_text(text):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     rows = []
     current = {}
+    pending_name = None
+    kv_re = re.compile(r"^([A-Za-z_][A-Za-z0-9_ ]*?)\s*:\s*(.*)$")
     for line in lines:
-        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*:", line):
-            key, _, value = line.partition(":")
-            current[key.strip()] = value.strip()
+        m = kv_re.match(line)
+        if m:
+            key = m.group(1).strip()
+            value = m.group(2).strip()
+            # A repeated known key (e.g. another "Status") means the previous
+            # block is finished and a new record has started.
+            if key.lower() in current:
+                rows.append(current)
+                current = {}
+            if pending_name is not None:
+                current.setdefault("name", pending_name)
+                pending_name = None
+            current[key] = value
         else:
+            # Bare line: flush any open block, then treat the line as the name
+            # (title) of the following key:value block.
             if current:
                 rows.append(current)
                 current = {}
-            rows.append({"name": line})
+            pending_name = line
     if current:
         rows.append(current)
+    elif pending_name is not None and not rows:
+        rows.append({"name": pending_name})
     if not rows:
         return []
     return _records_from_dicts(rows)
@@ -175,12 +262,17 @@ def _deepseek_extract(text):
     client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
     try:
         resp = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
             messages=[
-                {"role": "system", "content": "Extract records as JSON array with keys title, status, due_date. Return only JSON."},
+                {"role": "system", "content": (
+                    "Extract records as a JSON array of objects with keys "
+                    "title, status, due_date. Use the source/company/entity name "
+                    "as the title. Return only JSON."
+                )},
                 {"role": "user", "content": text},
             ],
             temperature=0,
+            max_tokens=2000,
         )
         content = resp.choices[0].message.content.strip()
         content = re.sub(r"^```(?:json)?|```$", "", content, flags=re.MULTILINE).strip()
@@ -190,6 +282,11 @@ def _deepseek_extract(text):
         return _records_from_dicts([d for d in data if isinstance(d, dict)])
     except Exception:
         return []
+
+
+def _records_are_noise(records):
+    """True when none of the parsed records carry a usable title."""
+    return not records or not any(r.get("title") for r in records)
 
 
 def process_file(file_bytes):
@@ -212,12 +309,23 @@ def process_file(file_bytes):
         try:
             text = file_bytes.decode("utf-8-sig")
         except UnicodeDecodeError:
-            return []
+            text = ""
         if any(line.strip() for line in text.splitlines()):
             records = _parse_csv(text)
         if not records:
             records = _parse_plain_text(text)
-    # DeepSeek fallback for unstructured single-text docs
+    # DeepSeek rescue: deterministic parsers produced only title-less noise
+    # (e.g. unrecognized headers) -> let the LLM extract real records.
+    if _records_are_noise(records):
+        try:
+            text = file_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = ""
+        if text.strip():
+            llm_records = _deepseek_extract(text)
+            if llm_records:
+                records = llm_records
+    # DeepSeek fallback for unstructured single-text documents.
     if not records:
         try:
             text = file_bytes.decode("utf-8-sig")

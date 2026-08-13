@@ -22,14 +22,28 @@ export default async function handler(req, res) {
   const productId = process.env.VITE_PRODUCT_ID
   const manual = await fetchProductManual(productId)
   const systemPrompt = manual ? `${system}\n\nPRODUCT MANUAL:\n${manual}` : system
-  const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'deepseek-v4-flash', max_tokens: 1000, messages: [{ role: 'system', content: systemPrompt }, ...messages] })
-  })
-  const data = await r.json()
-  if (data.choices?.[0]?.message && !data.choices[0].message.content) {
-    data.choices[0].message.content = data.choices[0].message.reasoning_content || 'Something went wrong. Please try again.'
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 25000)
+  try {
+    const r = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'deepseek-v4-flash', max_tokens: 2048, messages: [{ role: 'system', content: systemPrompt }, ...messages] }),
+      signal: controller.signal,
+    })
+    const data = await r.json()
+    if (data.choices?.[0]?.message && !data.choices[0].message.content) {
+      data.choices[0].message.content = data.choices[0].message.reasoning_content || 'Something went wrong. Please try again.'
+    }
+    if (!data.choices?.[0]?.message?.content && r.status !== 200) {
+      return res.status(r.status).json({ error: data?.error?.message || 'Upstream request failed' })
+    }
+    res.status(r.status).json(data)
+  } catch (err) {
+    const aborted = err && err.name === 'AbortError'
+    return res.status(504).json({ error: aborted ? 'Assistant request timed out. Please try again.' : 'Could not reach the assistant service.' })
+  } finally {
+    clearTimeout(timeout)
   }
-  res.status(r.status).json(data)
 }
