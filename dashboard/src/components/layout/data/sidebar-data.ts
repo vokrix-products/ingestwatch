@@ -1,4 +1,9 @@
-import { TASKS_NAV_LABEL, TASKS_NAV_ICON, SHOW_TASKS_NAV } from '@/product-config'
+import {
+  TASKS_NAV_LABEL,
+  TASKS_NAV_ICON,
+  SHOW_TASKS_NAV,
+  PRODUCT_ARCHETYPE,
+} from '@/product-config'
 import { LayoutDashboard } from 'lucide-react'
 import { type SidebarData } from '../types'
 
@@ -13,7 +18,16 @@ export const sidebarData: SidebarData = {
           icon: LayoutDashboard,
         },
         ...(SHOW_TASKS_NAV
-          ? [{ title: TASKS_NAV_LABEL, url: '/tasks', icon: TASKS_NAV_ICON }]
+          ? [
+              {
+                title: TASKS_NAV_LABEL,
+                url:
+                  PRODUCT_ARCHETYPE === 'monitor'
+                    ? '/sources'
+                    : '/tasks',
+                icon: TASKS_NAV_ICON,
+              },
+            ]
           : []),
       ],
     },

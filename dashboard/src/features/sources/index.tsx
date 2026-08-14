@@ -1,0 +1,275 @@
+import { useMemo, useState } from 'react'
+import { Header } from '@/components/layout/header'
+import { Main } from '@/components/layout/main'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { NotificationsBell } from '@/components/notifications-bell'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { RefreshCw, TriangleAlert, Radio } from 'lucide-react'
+import { statuses, severityToBadgeVariant } from '@/features/tasks/data/data'
+import {
+  useSources,
+  useRunMonitor,
+  type SourceRow,
+} from './data/sources'
+
+function statusBadge(status: string) {
+  const def = statuses.find((s) => s.value === status)
+  const variant = def ? severityToBadgeVariant[def.severity] : 'secondary'
+  return <Badge variant={variant}>{def?.label ?? status}</Badge>
+}
+
+function formatTime(iso: string | null) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+export function Sources() {
+  const { data: sources, isLoading, error } = useSources()
+  const runMonitor = useRunMonitor()
+  const [notice, setNotice] = useState(false)
+
+  const counts = useMemo(() => {
+    const rows = sources ?? []
+    const critical = rows.filter((r) =>
+      r.status.endsWith(':critical')
+    ).length
+    const attention = rows.filter(
+      (r) =>
+        r.status.endsWith(':warning') || r.status.endsWith(':critical')
+    ).length
+    return { total: rows.length, attention, critical }
+  }, [sources])
+
+  async function handleRun() {
+    try {
+      await runMonitor.mutateAsync()
+      setNotice(true)
+    } catch {}
+  }
+
+  return (
+    <>
+      <Header fixed>
+        <Search className='me-auto' />
+        <ThemeSwitch />
+        <NotificationsBell />
+        <ProfileDropdown />
+      </Header>
+
+      <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        <div className='flex flex-wrap items-end justify-between gap-2'>
+          <div>
+            <h2 className='text-2xl font-bold tracking-tight'>
+              Monitored Sources
+            </h2>
+            <p className='text-muted-foreground'>
+              Scheduled ingestion jobs under watch
+            </p>
+          </div>
+          <Button
+            onClick={handleRun}
+            disabled={runMonitor.isPending}
+            data-testid='run-monitor-button'
+          >
+            <RefreshCw
+              className={
+                runMonitor.isPending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
+              }
+            />
+            {runMonitor.isPending ? 'Queuing...' : 'Run monitor now'}
+          </Button>
+        </div>
+
+        {notice && (
+          <div className='flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground'>
+            <span>
+              Monitor run queued — results appear here within a minute.
+              Sources are discovered from GitHub Actions; the poller needs
+              GITHUB_SOURCE_OWNER and GITHUB_TOKEN set to find any.
+            </span>
+            <button
+              onClick={() => setNotice(false)}
+              className='ml-4 text-xs font-medium underline underline-offset-2'
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div className='grid gap-4 sm:grid-cols-3'>
+          <Card>
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle className='text-sm font-medium'>
+                Total Sources
+              </CardTitle>
+              <Radio className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
+            <CardContent>
+              <div className='text-2xl font-bold tracking-tight'>
+                {isLoading ? (
+                  <Skeleton className='h-8 w-12' />
+                ) : (
+                  counts.total
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle className='text-sm font-medium'>
+                Needs Attention
+              </CardTitle>
+              <TriangleAlert className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
+            <CardContent>
+              <div className='text-2xl font-bold tracking-tight text-destructive'>
+                {isLoading ? (
+                  <Skeleton className='h-8 w-12' />
+                ) : (
+                  counts.attention
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+              <CardTitle className='text-sm font-medium'>Critical</CardTitle>
+              <TriangleAlert className='h-4 w-4 text-muted-foreground' />
+            </CardHeader>
+            <CardContent>
+              <div className='text-2xl font-bold tracking-tight text-destructive'>
+                {isLoading ? (
+                  <Skeleton className='h-8 w-12' />
+                ) : (
+                  counts.critical
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sources</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading && <Skeleton className='h-24 w-full' />}
+            {error && (
+              <p className='text-sm text-destructive'>
+                Failed to load: {error.message}
+              </p>
+            )}
+            {!isLoading && !error && sources && sources.length === 0 && (
+              <div className='flex flex-col items-center justify-center gap-2 py-10 text-center'>
+                <Radio className='h-8 w-8 text-muted-foreground/40' />
+                <p className='text-sm font-medium'>
+                  No monitored sources yet
+                </p>
+                <p className='max-w-md text-sm text-muted-foreground'>
+                  Sources are auto-discovered from GitHub Actions workflows by
+                  the poller (read-only). Set{' '}
+                  <code className='rounded bg-muted px-1 py-0.5 text-xs'>
+                    GITHUB_SOURCE_OWNER
+                  </code>{' '}
+                  and{' '}
+                  <code className='rounded bg-muted px-1 py-0.5 text-xs'>
+                    GITHUB_TOKEN
+                  </code>{' '}
+                  on the poller, then click &quot;Run monitor now&quot;.
+                </p>
+              </div>
+            )}
+            {!isLoading &&
+              !error &&
+              sources &&
+              sources.length > 0 && (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Last Run</TableHead>
+                      <TableHead className='text-right'>Fetched</TableHead>
+                      <TableHead className='text-right'>Scored</TableHead>
+                      <TableHead className='text-right'>Qualified</TableHead>
+                      <TableHead>Alert</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sources.map((s: SourceRow) => (
+                      <TableRow key={s.id}>
+                        <TableCell>
+                          <div className='font-medium'>{s.title}</div>
+                          <div className='text-xs text-muted-foreground'>
+                            {[s.repoOwner, s.workflowId]
+                              .filter(Boolean)
+                              .join(' / ') ||
+                              (s.sourceName ?? '')}
+                            {s.schedule ? ` · ${s.schedule}` : ''}
+                          </div>
+                        </TableCell>
+                        <TableCell>{statusBadge(s.status)}</TableCell>
+                        <TableCell>{formatTime(s.lastRunAt)}</TableCell>
+                        <TableCell className='text-right'>
+                          {s.fetched ?? '—'}
+                        </TableCell>
+                        <TableCell className='text-right'>
+                          {s.scored ?? '—'}
+                        </TableCell>
+                        <TableCell className='text-right'>
+                          {s.qualified ?? '—'}
+                        </TableCell>
+                        <TableCell>
+                          {s.alertReason ? (
+                            <span className='text-xs text-muted-foreground'>
+                              {s.alertReason}
+                            </span>
+                          ) : s.runUrl ? (
+                            <a
+                              href={s.runUrl}
+                              target='_blank'
+                              rel='noreferrer'
+                              className='text-xs text-primary hover:underline'
+                            >
+                              View run
+                            </a>
+                          ) : (
+                            <span className='text-xs text-muted-foreground'>
+                              —
+                            </span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+          </CardContent>
+        </Card>
+      </Main>
+    </>
+  )
+}
