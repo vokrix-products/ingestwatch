@@ -66,6 +66,7 @@ _STATUS_SYNONYMS = {
     "pass": "valid:good", "healthy": "valid:good", "running": "valid:good",
     "failed": "failed:critical", "failure": "failed:critical", "error": "failed:critical",
     "missing": "missing:critical", "not_found": "missing:critical",
+    "critical": "failed:critical",
     "expired": "expired:warning", "overdue": "expired:warning",
     "empty": "empty:warning", "blank": "empty:warning",
     "flagged": "flagged:warning", "warning": "flagged:warning",
@@ -343,6 +344,8 @@ def process_file(file_bytes):
             text = ""
         if any(line.strip() for line in text.splitlines()):
             records = _parse_csv(text)
+        if not records:
+            records = _parse_markdown_table(text)
         if not records:
             records = _parse_plain_text(text)
     # DeepSeek rescue: deterministic parsers produced only title-less noise
