@@ -105,10 +105,6 @@ function jobDisplayName(job: Job): string {
   return job.input_file_path?.split('_').slice(1).join('_') ?? 'Upload'
 }
 
-
-// PRODUCT_CUSTOMIZE: the `accept` attribute on the file input describes
-// what file types this product processes (e.g. '.csv,.xlsx,.pdf').
-// Set MULTI_FILE = true for products needing more than one input file per job.
 function FullscreenDropOverlay({ onDrop }: { onDrop: (files: File[]) => void }) {
   return (
     <div
@@ -136,14 +132,59 @@ function FullscreenDropOverlay({ onDrop }: { onDrop: (files: File[]) => void }) 
   )
 }
 
-// IngestWatch is a poller: users upload a source manifest (JSON/CSV) or raw
-// operational file and get normalized monitoring records back, so the upload
-// surface must be present for extraction, report, AND monitor archetypes.
+// IngestWatch is a poller: its primary input is a GitHub org connection
+// (auto-discovered Actions workflows). Raw file/manifest upload remains for
+// extraction/report archetypes. The 3-upload paywall does not apply to the
+// monitor archetype.
 const SHOW_UPLOAD =
   PRODUCT_ARCHETYPE === 'extraction' ||
-  PRODUCT_ARCHETYPE === 'report' ||
-  PRODUCT_ARCHETYPE === 'monitor'
+  PRODUCT_ARCHETYPE === 'report'
+const SHOW_GITHUB_CONNECT = PRODUCT_ARCHETYPE === 'monitor'
 const MULTI_FILE = false
+
+// GitHub App OAuth is not built yet; this CTA is honest about that and
+// points users to the working path (Sources -> Run monitor now).
+function GithubConnectCard() {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <div className='relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center overflow-hidden'>
+        <DotPattern className='absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]' />
+        <div className='relative flex h-12 w-12 items-center justify-center rounded-full border bg-muted/40'>
+          <svg width='24' height='24' viewBox='0 0 16 16' fill='currentColor' className='text-foreground'>
+            <path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z'/>
+          </svg>
+        </div>
+        <p className='relative text-sm text-muted-foreground max-w-md'>
+          Connect your GitHub organization to monitor scheduled ingestion workflows — GitHub Actions, cron jobs, and API syncs — with per-run fetched/scored/qualified counts.
+        </p>
+        <RippleButton
+          rippleColor="#5e6ad2"
+          onClick={() => setOpen(true)}
+          data-testid="connect-github-button"
+          className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
+        >
+          Connect GitHub App
+        </RippleButton>
+      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent data-testid="github-connect-modal">
+          <DialogHeader>
+            <DialogTitle>GitHub App install — coming soon</DialogTitle>
+            <DialogDescription>
+              The GitHub App OAuth flow is being set up. Until it ships, your sources are auto-discovered by the poller — open the Sources page and click “Run monitor now”.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-4 pt-2'>
+            <Button className='w-full' onClick={() => setOpen(false)}>
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
 
 export function JobsCard() {
   const { uploadFile, uploadFiles, uploading, error, trialLimitReached, setTrialLimitReached } = useUploadJob()
@@ -217,126 +258,139 @@ export function JobsCard() {
       {isDraggingOver && SHOW_UPLOAD && (
         <FullscreenDropOverlay onDrop={handleFiles} />
       )}
-    <PaywallModal open={trialLimitReached} onClose={() => setTrialLimitReached(false)} />
-    <Card className='relative overflow-hidden'>
+      <PaywallModal open={trialLimitReached} onClose={() => setTrialLimitReached(false)} />
+      <Card className='relative overflow-hidden'>
         <ShineBorder shineColor={['#5e6ad2', '#a78bfa', '#5e6ad2']} borderWidth={1} />
-      <CardHeader>
-        <CardTitle>
-          {SHOW_UPLOAD ? (MULTI_FILE ? 'Upload files' : 'Upload a file') : 'Processing Queue'}
-        </CardTitle>
-        {SHOW_UPLOAD && (
-          <CardDescription>
-            {MULTI_FILE
-              ? (import.meta.env.VITE_UPLOAD_DESCRIPTION_MULTI as string ?? 'Drop your files here and we’ll process them automatically.')
-              : (import.meta.env.VITE_UPLOAD_DESCRIPTION as string ?? 'Upload a file and we’ll process it automatically.')}
-          </CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className='space-y-4'>
-        {SHOW_UPLOAD && !isPaid && (
-          <div className='flex items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3'>
-            <AnimatedCircularProgressBar
-              max={limit}
-              min={0}
-              value={used}
-              gaugePrimaryColor={primaryColor}
-              gaugeSecondaryColor='rgba(255,255,255,0.1)'
-              className='size-16 text-sm'
-            />
-            <div className='flex-1 min-w-0'>
-              <p className='text-sm font-medium'>{used} of {limit} free uploads used</p>
-              <p className='text-xs text-muted-foreground mt-0.5'>
-                {used >= limit ? 'Upgrade to continue uploading' : `${limit - used} remaining on free plan`}
-              </p>
-            </div>
-            {used >= limit && (
-              <button onClick={openCheckout} className='shrink-0 text-xs font-medium text-primary hover:underline'>
-                Upgrade
-              </button>
-            )}
-          </div>
-        )}
-        {SHOW_UPLOAD && (
-          <div
-            className='relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center overflow-hidden'
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-          >
-            <DotPattern className='absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]' />
-            <p className='relative text-sm text-muted-foreground'>
-              Drag and drop {MULTI_FILE ? 'files' : 'a file'} here, or
-            </p>
-            <RippleButton
-              rippleColor="#5e6ad2"
-              disabled={uploading}
-              onClick={() => inputRef.current?.click()}
-              className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
-            >
-              {uploading
-                ? 'Uploading...'
-                : MULTI_FILE
-                  ? 'Choose files'
-                  : 'Choose file'}
-            </RippleButton>
-            <input
-              ref={inputRef}
-              type='file'
-              multiple={MULTI_FILE}
-              data-testid='file-input'
-              className='absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0'
-              onChange={handleFileChange}
-            />
-            {error && <p className='text-sm text-destructive'>{error}</p>}
-          </div>
-        )}
-
-        <div className='space-y-2'>
-          {isLoading && (
-            <p className='text-sm text-muted-foreground'>Loading jobs...</p>
+        <CardHeader>
+          <CardTitle>
+            {SHOW_GITHUB_CONNECT
+              ? 'Connect GitHub'
+              : SHOW_UPLOAD
+                ? (MULTI_FILE ? 'Upload files' : 'Upload a file')
+                : 'Processing Queue'}
+          </CardTitle>
+          {SHOW_GITHUB_CONNECT && (
+            <CardDescription>
+              Monitor the health of your scheduled ingestion sources.
+            </CardDescription>
           )}
-          {!isLoading && jobs && jobs.length === 0 && (
-            <p className='text-sm text-muted-foreground'>
-              {(import.meta.env.VITE_UPLOAD_EMPTY_STATE as string) ?? 'No files uploaded yet.'}
-            </p>
+          {SHOW_UPLOAD && (
+            <CardDescription>
+              {MULTI_FILE
+                ? (import.meta.env.VITE_UPLOAD_DESCRIPTION_MULTI as string ?? 'Drop your files here and we’ll process them automatically.')
+                : (import.meta.env.VITE_UPLOAD_DESCRIPTION as string ?? 'Upload a file and we’ll process it automatically.')}
+            </CardDescription>
           )}
-          {jobs?.slice(0, 5).map((job) => (
-            <div
-              key={job.id}
-              className='flex items-center justify-between rounded-md border px-3 py-2'
-            >
-              <div className='space-y-0.5'>
-                <p className='text-sm font-medium'>{jobDisplayName(job)}</p>
-                <p className='text-xs text-muted-foreground'>
-                  {formatTime(job.created_at)}
-                  {job.status === 'failed' && job.error_message
-                    ? ` — ${job.error_message}`
-                    : ''}
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          {SHOW_UPLOAD && !isPaid && (
+            <div className='flex items-center gap-4 rounded-lg border border-border bg-muted/30 px-4 py-3'>
+              <AnimatedCircularProgressBar
+                max={limit}
+                min={0}
+                value={used}
+                gaugePrimaryColor={primaryColor}
+                gaugeSecondaryColor='rgba(255,255,255,0.1)'
+                className='size-16 text-sm'
+              />
+              <div className='flex-1 min-w-0'>
+                <p className='text-sm font-medium'>{used} of {limit} free uploads used</p>
+                <p className='text-xs text-muted-foreground mt-0.5'>
+                  {used >= limit ? 'Upgrade to continue uploading' : `${limit - used} remaining on free plan`}
                 </p>
               </div>
-              <div className='flex items-center gap-2'>
-                <Badge variant={statusBadgeVariant(job.status)}>
-                  {statusLabel(job.status)}
-                </Badge>
-                {job.status === 'completed' && job.output_file_path && (
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={() =>
-                      downloadJobResult(
-                        job.output_file_path!,
-                        `${jobDisplayName(job)}-result.csv`
-                      )
-                    }
-                  >
-                    Download
-                  </Button>
-                )}
-              </div>
+              {used >= limit && (
+                <button onClick={openCheckout} className='shrink-0 text-xs font-medium text-primary hover:underline'>
+                  Upgrade
+                </button>
+              )}
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          )}
+          {SHOW_GITHUB_CONNECT ? (
+            <GithubConnectCard />
+          ) : (
+            SHOW_UPLOAD && (
+              <div
+                className='relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center overflow-hidden'
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+              >
+                <DotPattern className='absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]' />
+                <p className='relative text-sm text-muted-foreground'>
+                  Drag and drop {MULTI_FILE ? 'files' : 'a file'} here, or
+                </p>
+                <RippleButton
+                  rippleColor="#5e6ad2"
+                  disabled={uploading}
+                  onClick={() => inputRef.current?.click()}
+                  className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
+                >
+                  {uploading
+                    ? 'Uploading...'
+                    : MULTI_FILE
+                      ? 'Choose files'
+                      : 'Choose file'}
+                </RippleButton>
+                <input
+                  ref={inputRef}
+                  type='file'
+                  multiple={MULTI_FILE}
+                  data-testid='file-input'
+                  className='absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0'
+                  onChange={handleFileChange}
+                />
+                {error && <p className='text-sm text-destructive'>{error}</p>}
+              </div>
+            )
+          )}
+
+          <div className='space-y-2'>
+            {isLoading && (
+              <p className='text-sm text-muted-foreground'>Loading jobs...</p>
+            )}
+            {!isLoading && jobs && jobs.length === 0 && (
+              <p className='text-sm text-muted-foreground'>
+                {(import.meta.env.VITE_UPLOAD_EMPTY_STATE as string) ?? (SHOW_GITHUB_CONNECT ? 'No monitor runs yet — head to Sources and click “Run monitor now”.' : 'No files uploaded yet.')}
+              </p>
+            )}
+            {jobs?.slice(0, 5).map((job) => (
+              <div
+                key={job.id}
+                className='flex items-center justify-between rounded-md border px-3 py-2'
+              >
+                <div className='space-y-0.5'>
+                  <p className='text-sm font-medium'>{jobDisplayName(job)}</p>
+                  <p className='text-xs text-muted-foreground'>
+                    {formatTime(job.created_at)}
+                    {job.status === 'failed' && job.error_message
+                      ? ` — ${job.error_message}`
+                      : ''}
+                  </p>
+                </div>
+                <div className='flex items-center gap-2'>
+                  <Badge variant={statusBadgeVariant(job.status)}>
+                    {statusLabel(job.status)}
+                  </Badge>
+                  {job.status === 'completed' && job.output_file_path && (
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={() =>
+                        downloadJobResult(
+                          job.output_file_path!,
+                          `${jobDisplayName(job)}-result.csv`
+                        )
+                      }
+                    >
+                      Download
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </>
   )
 }
