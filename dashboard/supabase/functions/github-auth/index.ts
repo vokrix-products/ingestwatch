@@ -29,7 +29,6 @@ async function handleInstall(url: URL): Promise<Response> {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     state,
-    scope: 'repo',
   })
   return Response.redirect(`https://github.com/login/oauth/authorize?${params}`, 302)
 }
