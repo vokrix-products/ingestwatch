@@ -99,6 +99,9 @@ function formatTime(iso: string) {
 }
 
 function jobDisplayName(job: Job): string {
+  if ((job as { job_type?: string }).job_type === 'process_sources') {
+    return 'Monitor run'
+  }
   if (job.input_file_paths && job.input_file_paths.length > 0) {
     const names = job.input_file_paths.map((p) => p.split('/').pop() ?? p)
     return names.length === 1 ? names[0] : `${names.length} files`

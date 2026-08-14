@@ -131,18 +131,30 @@ export function Sources() {
               Scheduled ingestion jobs under watch
             </p>
           </div>
-          <Button
-            onClick={handleRun}
-            disabled={runMonitor.isPending}
-            data-testid='run-monitor-button'
-          >
-            <RefreshCw
-              className={
-                runMonitor.isPending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
-              }
-            />
-            {runMonitor.isPending ? 'Queuing...' : 'Run monitor now'}
-          </Button>
+          <div className='flex items-center gap-2'>
+            {conn && (
+              <Button
+                variant='outline'
+                size='sm'
+                onClick={connectGitHub}
+                data-testid='reconnect-github-button'
+              >
+                Re-connect / switch account
+              </Button>
+            )}
+            <Button
+              onClick={handleRun}
+              disabled={runMonitor.isPending}
+              data-testid='run-monitor-button'
+            >
+              <RefreshCw
+                className={
+                  runMonitor.isPending ? 'h-4 w-4 animate-spin' : 'h-4 w-4'
+                }
+              />
+              {runMonitor.isPending ? 'Queuing...' : 'Run monitor now'}
+            </Button>
+          </div>
         </div>
 
         {notice && (

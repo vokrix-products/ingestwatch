@@ -22,15 +22,27 @@ def _headers(token):
 
 
 def list_repos(owner, token, per_page=100):
-    """List repo names for an org (falling back to a user account)."""
-    url = "{}/orgs/{}/repos".format(API, owner)
-    resp = requests.get(url, headers=_headers(token), params={"per_page": per_page, "sort": "updated"}, timeout=30)
-    if resp.status_code != 200:
-        url = "{}/users/{}/repos".format(API, owner)
-        resp = requests.get(url, headers=_headers(token), params={"per_page": per_page, "sort": "updated"}, timeout=30)
-    if resp.status_code != 200:
-        raise RuntimeError("GitHub API {} {}: {}".format(resp.status_code, url, resp.text[:300]))
-    return [r.get("name") for r in resp.json() if r.get("name")]
+    """List repos accessible to the token, as full 'owner/name' refs.
+
+    /user/repos works for GitHub App user tokens (ghu_...), classic PATs,
+    and org members alike, returning every repo the token can read. Falls
+    back to public org/user listings when the token cannot use it.
+    """
+    url = "{}/user/repos".format(API)
+    resp = requests.get(url, headers=_headers(token), params={"per_page": per_page, "sort": "updated", "visibility": "all"}, timeout=30)
+    if resp.status_code == 200:
+        return [
+            r.get("full_name") or "{}/{}".format((r.get("owner") or {}).get("login"), r.get("name"))
+            for r in resp.json()
+            if r.get("name")
+        ]
+    if owner:
+        for base in ("orgs", "users"):
+            url = "{}/{}/{}/repos".format(API, base, owner)
+            resp = requests.get(url, headers=_headers(token), params={"per_page": per_page, "sort": "updated"}, timeout=30)
+            if resp.status_code == 200:
+                return ["{}/{}".format(owner, r.get("name")) for r in resp.json() if r.get("name")]
+    raise RuntimeError("GitHub API {} {}: {}".format(resp.status_code, url, resp.text[:300]))
 
 
 def workflows(owner, repo, token):
@@ -107,12 +119,22 @@ def discover_sources(owner, token=None, repos=None, days=7):
     token = token or os.environ.get("GITHUB_TOKEN")
     if not token:
         return []
-    repo_names = repos or list_repos(owner, token)
+    repo_refs = repos or list_repos(owner, token)
     rows = []
-    for repo in repo_names:
-        for wf in workflows(owner, repo, token):
-            run = workflow_latest_run(owner, repo, wf.get("id"), token)
-            rows.append(_map_workflow(wf, run, owner, repo))
+    errors = []
+    for ref in repo_refs:
+        if "/" in ref:
+            repo_owner, repo_name = ref.split("/", 1)
+        else:
+            repo_owner, repo_name = owner, ref
+        try:
+            for wf in workflows(repo_owner, repo_name, token):
+                run = workflow_latest_run(repo_owner, repo_name, wf.get("id"), token)
+                rows.append(_map_workflow(wf, run, repo_owner, repo_name))
+        except Exception as exc:
+            errors.append("{}: {}".format(ref, str(exc)[:200]))
+    if not rows and errors:
+        raise RuntimeError("; ".join(errors[:3]))
     return rows
 
 

@@ -10,6 +10,7 @@ import monitor
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 PRODUCT_ID = os.environ["PRODUCT_ID"]
+POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "60"))
 SUPABASE_REST = f"{SUPABASE_URL}/rest/v1"
 
 
@@ -211,7 +212,7 @@ def poll():
                 process_job(job)
         except Exception:
             pass
-        time.sleep(60)
+        time.sleep(POLL_INTERVAL_SECONDS)
 
 
 if __name__ == "__main__":
