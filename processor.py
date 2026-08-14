@@ -189,6 +189,14 @@ def _records_from_dicts(rows):
 
 
 def _parse_csv(text):
+    sample = text.strip().splitlines()
+    if not sample:
+        return []
+    # Only treat text as CSV when a real delimiter is present in the header.
+    # Without this guard, bare-word plain text ("Acme Corp\nGlobex") would be
+    # misread as single-column rows with the first line as header.
+    if not any(d in sample[0] for d in (",", "\t", ";")):
+        return []
     reader = csv.DictReader(io.StringIO(text))
     rows = [row for row in reader if row and any((v or "").strip() for v in row.values())]
     if not rows:
@@ -218,14 +226,17 @@ def _parse_plain_text(text):
             current[key] = value
         else:
             # Bare line: flush any open block, then treat the line as the name
-            # (title) of the following key:value block.
+            # (title) of the following key:value block. Consecutive bare lines
+            # each become their own record.
             if current:
                 rows.append(current)
                 current = {}
+            if pending_name is not None:
+                rows.append({"name": pending_name})
             pending_name = line
     if current:
         rows.append(current)
-    elif pending_name is not None and not rows:
+    elif pending_name is not None:
         rows.append({"name": pending_name})
     if not rows:
         return []
