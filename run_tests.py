@@ -73,6 +73,22 @@ class ProcessorTests(unittest.TestCase):
         self.assertEqual(records[0]["title"], "Acme Corp")
         self.assertEqual(records[2]["title"], "Initech")
 
+    def test_process_file_markdown_table(self):
+        data = (
+            "| source_name | status | due_date |\n"
+            "|------------|--------|----------|\n"
+            "| Panhandle Fuel | warning | 2025-11-25 |\n"
+            "| ERCOT Grid | failed | 2025-11-30 |\n"
+        )
+        records = process_file(data.encode("utf-8"))
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0]["title"], "Panhandle Fuel")
+        self.assertEqual(records[0]["status"], "flagged:warning")
+        self.assertEqual(records[0].get("due_date"), "2025-11-25")
+        self.assertEqual(records[1]["title"], "ERCOT Grid")
+        self.assertEqual(records[1]["status"], "failed:critical")
+
+
 
 class MonitorTests(unittest.TestCase):
     def test_manifest_healthy_source(self):
