@@ -59,6 +59,17 @@ def monitor_demo():
                 "last_run_at": None,
                 "next_run_at": ts(-1),
             },
+            {
+                "source_name": "zendesk-tickets",
+                "workflow_id": "tickets.yml",
+                "schedule": "0 */12 * * *",
+                "last_run_at": ts(-12),
+                "next_run_at": ts(12),
+                "status": "success",
+                "fetched_count": 200,
+                "scored_count": 80,
+                "qualified_count": 40,
+            },
         ]
     }
     records = process_sources(json.dumps(manifest))

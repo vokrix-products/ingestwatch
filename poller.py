@@ -66,6 +66,33 @@ def insert_notification(product_id, customer_id, title, body, ntype):
         pass
 
 
+def send_slack(text):
+    """Post an alert to Slack when SLACK_WEBHOOK_URL is configured."""
+    webhook = os.environ.get("SLACK_WEBHOOK_URL")
+    if not webhook:
+        return
+    try:
+        requests.post(webhook, json={"text": text}, timeout=10)
+    except Exception:
+        pass
+
+
+def github_manifest():
+    """Build a source manifest from GitHub Actions runs when configured."""
+    owner = os.environ.get("GITHUB_SOURCE_OWNER")
+    token = os.environ.get("GITHUB_TOKEN")
+    if not owner or not token:
+        return None
+    try:
+        import github_connector
+        rows = github_connector.discover_sources(owner, token=token)
+        if not rows:
+            return None
+        return json.dumps({"sources": rows})
+    except Exception:
+        return None
+
+
 def _insert_records(results, customer_id, input_path):
     rec_url = f"{SUPABASE_REST}/records"
     resp = requests.post(rec_url, headers=get_headers(), json=results, timeout=60)
@@ -78,9 +105,20 @@ def process_job(job):
     input_path = job.get("input_file_path", "")
     job_type = job.get("job_type") or "process_upload"
     try:
-        file_bytes = download_file("uploads", input_path)
+        file_bytes = b""
+        if input_path:
+            try:
+                file_bytes = download_file("uploads", input_path)
+            except Exception:
+                file_bytes = b""
         if job_type == "process_sources":
-            records = monitor.process_sources(file_bytes)
+            manifest_text = file_bytes.decode("utf-8-sig", "replace").strip() if file_bytes else ""
+            if not manifest_text:
+                manifest_text = github_manifest()
+            if manifest_text:
+                records = monitor.process_sources(manifest_text)
+            else:
+                records = []
             noun = "sources"
         else:
             records = processor.process_file(file_bytes)
@@ -115,6 +153,7 @@ def process_job(job):
             critical = [r.get("title") for r in results if str(r.get("status", "")).endswith(":critical")]
             if critical:
                 insert_notification(PRODUCT_ID, customer_id, "Sources need attention", "Critical: " + ", ".join(critical[:5]), "error")
+                send_slack(":rotating_light: IngestWatch: " + ", ".join(critical[:5]))
     except Exception as exc:
         now = datetime.now(timezone.utc).isoformat()
         try:
