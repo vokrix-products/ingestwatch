@@ -276,7 +276,7 @@ export function JobsCard() {
               ref={inputRef}
               type='file'
               multiple={MULTI_FILE}
-              className='hidden'
+              className='absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0'
               onChange={handleFileChange}
             />
             {error && <p className='text-sm text-destructive'>{error}</p>}
