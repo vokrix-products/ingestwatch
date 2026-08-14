@@ -27,6 +27,7 @@ import {
   type Job,
 } from '../data/jobs'
 import { AnimatedCircularProgressBar } from '@/components/magicui/animated-circular-progress-bar'
+import { connectGitHub, useGithubConnection } from '@/lib/github'
 
 const BILLING_WEBHOOK_URL = 'https://web-production-6adc6.up.railway.app'
 const PRICE_ID = (import.meta.env.VITE_STRIPE_PRICE_ID as string) ?? ''
@@ -132,7 +133,7 @@ function FullscreenDropOverlay({ onDrop }: { onDrop: (files: File[]) => void }) 
   )
 }
 
-// IngestWatch is a poller: its primary input is a GitHub org connection
+// IngestWatch is a poller: its primary input is a GitHub connection
 // (auto-discovered Actions workflows). Raw file/manifest upload remains for
 // extraction/report archetypes. The 3-upload paywall does not apply to the
 // monitor archetype.
@@ -142,47 +143,61 @@ const SHOW_UPLOAD =
 const SHOW_GITHUB_CONNECT = PRODUCT_ARCHETYPE === 'monitor'
 const MULTI_FILE = false
 
-// GitHub App OAuth is not built yet; this CTA is honest about that and
-// points users to the working path (Sources -> Run monitor now).
 function GithubConnectCard() {
-  const [open, setOpen] = useState(false)
+  const { conn } = useGithubConnection()
   return (
-    <>
-      <div className='relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center overflow-hidden'>
-        <DotPattern className='absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]' />
-        <div className='relative flex h-12 w-12 items-center justify-center rounded-full border bg-muted/40'>
+    <div className='relative flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-8 text-center overflow-hidden'>
+      <DotPattern className='absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,white,transparent)]' />
+      <div className='relative flex h-12 w-12 items-center justify-center rounded-full border bg-muted/40'>
+        {conn?.avatar_url ? (
+          <img
+            src={conn.avatar_url}
+            alt=''
+            className='h-9 w-9 rounded-full'
+          />
+        ) : (
           <svg width='24' height='24' viewBox='0 0 16 16' fill='currentColor' className='text-foreground'>
             <path d='M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z'/>
           </svg>
-        </div>
-        <p className='relative text-sm text-muted-foreground max-w-md'>
-          Connect your GitHub organization to monitor scheduled ingestion workflows — GitHub Actions, cron jobs, and API syncs — with per-run fetched/scored/qualified counts.
-        </p>
-        <RippleButton
-          rippleColor="#5e6ad2"
-          onClick={() => setOpen(true)}
-          data-testid="connect-github-button"
-          className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
-        >
-          Connect GitHub App
-        </RippleButton>
+        )}
       </div>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent data-testid="github-connect-modal">
-          <DialogHeader>
-            <DialogTitle>GitHub App install — coming soon</DialogTitle>
-            <DialogDescription>
-              The GitHub App OAuth flow is being set up. Until it ships, your sources are auto-discovered by the poller — open the Sources page and click “Run monitor now”.
-            </DialogDescription>
-          </DialogHeader>
-          <div className='space-y-4 pt-2'>
-            <Button className='w-full' onClick={() => setOpen(false)}>
-              Got it
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      {conn ? (
+        <>
+          <p className='relative text-sm font-medium'>
+            Connected as{' '}
+            <span className='text-primary'>@{conn.github_username}</span>
+          </p>
+          <p className='relative text-sm text-muted-foreground max-w-md'>
+            Your scheduled ingestion workflows are monitored read-only. Open
+            Sources and click “Run monitor now” to scan.
+          </p>
+          <RippleButton
+            rippleColor="#5e6ad2"
+            onClick={connectGitHub}
+            data-testid="connect-github-button"
+            className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
+          >
+            Re-connect / switch account
+          </RippleButton>
+        </>
+      ) : (
+        <>
+          <p className='relative text-sm text-muted-foreground max-w-md'>
+            Connect your GitHub account to monitor scheduled ingestion
+            workflows — GitHub Actions, cron jobs, and API syncs — with
+            per-run fetched/scored/qualified counts.
+          </p>
+          <RippleButton
+            rippleColor="#5e6ad2"
+            onClick={connectGitHub}
+            data-testid="connect-github-button"
+            className='border-[#5e6ad2]/50 text-white bg-[#5e6ad2]/10 hover:border-[#5e6ad2] px-6'
+          >
+            Connect GitHub App
+          </RippleButton>
+        </>
+      )}
+    </div>
   )
 }
 

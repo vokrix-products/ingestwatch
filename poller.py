@@ -77,10 +77,28 @@ def send_slack(text):
         pass
 
 
-def github_manifest():
-    """Build a source manifest from GitHub Actions runs when configured."""
-    owner = os.environ.get("GITHUB_SOURCE_OWNER")
-    token = os.environ.get("GITHUB_TOKEN")
+def get_github_connection(customer_id):
+    """Per-user GitHub connection (access token + username), if any."""
+    if not customer_id:
+        return None
+    try:
+        url = f"{SUPABASE_REST}/github_connections?user_id=eq.{customer_id}&select=github_username,access_token"
+        resp = requests.get(url, headers=get_headers(), timeout=30)
+        resp.raise_for_status()
+        rows = resp.json()
+        return rows[0] if rows else None
+    except Exception:
+        return None
+
+
+def github_manifest(owner=None, token=None):
+    """Build a source manifest from GitHub Actions runs.
+
+    Uses the given owner/token (per-user connection) when provided,
+    otherwise falls back to the deployment-level env vars.
+    """
+    owner = owner or os.environ.get("GITHUB_SOURCE_OWNER")
+    token = token or os.environ.get("GITHUB_TOKEN")
     if not owner or not token:
         return None
     try:
@@ -114,7 +132,15 @@ def process_job(job):
         if job_type == "process_sources":
             manifest_text = file_bytes.decode("utf-8-sig", "replace").strip() if file_bytes else ""
             if not manifest_text:
-                manifest_text = github_manifest()
+                conn = get_github_connection(customer_id)
+                if conn:
+                    manifest_text = github_manifest(owner=conn.get("github_username"), token=conn.get("access_token"))
+                    if not manifest_text:
+                        raise ValueError("No sources extracted — no GitHub Actions workflow runs found for the connected account")
+                elif os.environ.get("GITHUB_TOKEN"):
+                    manifest_text = github_manifest()
+                else:
+                    raise ValueError("No GitHub connection found — connect your GitHub account from the dashboard")
             if manifest_text:
                 records = monitor.process_sources(manifest_text)
             else:

@@ -11,6 +11,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { flowType: "implicit", detectSessionInUrl: true } })
 
+// Exposed for the GitHub App OAuth flow (edge function URL construction)
+export const SUPABASE_URL = supabaseUrl
+
 // PRODUCT_CUSTOMIZE: every product deployment sets this at provisioning
 // time (Job Registry writes it as a Vercel env var for that product's
 // project). Used to scope every query/RLS check to this specific product.

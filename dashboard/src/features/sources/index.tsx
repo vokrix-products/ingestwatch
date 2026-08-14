@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/table'
 import { RefreshCw, TriangleAlert, Radio } from 'lucide-react'
 import { statuses, severityToBadgeVariant } from '@/features/tasks/data/data'
+import { connectGitHub, useGithubConnection } from '@/lib/github'
 import {
   useSources,
   useRunMonitor,
@@ -49,7 +50,17 @@ function formatTime(iso: string | null) {
 export function Sources() {
   const { data: sources, isLoading, error } = useSources()
   const runMonitor = useRunMonitor()
+  const { conn } = useGithubConnection()
   const [notice, setNotice] = useState(false)
+  const [justConnected, setJustConnected] = useState(false)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connected') === '1') {
+      window.history.replaceState({}, '', window.location.pathname)
+      setJustConnected(true)
+    }
+  }, [])
 
   const counts = useMemo(() => {
     const rows = sources ?? []
@@ -80,6 +91,37 @@ export function Sources() {
       </Header>
 
       <Main className='flex flex-1 flex-col gap-4 sm:gap-6'>
+        {justConnected && conn && (
+          <div className='flex items-center justify-between rounded-lg border border-success bg-success/10 px-4 py-3 text-sm text-success'>
+            <span>
+              GitHub connected as @{conn.github_username}. Click “Run monitor
+              now” to discover your scheduled workflows.
+            </span>
+            <button
+              onClick={() => setJustConnected(false)}
+              className='ml-4 text-xs font-medium underline underline-offset-2'
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {!conn && (
+          <div className='flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3'>
+            <p className='text-sm text-muted-foreground'>
+              Connect GitHub to start monitoring your scheduled ingestion
+              workflows.
+            </p>
+            <Button
+              onClick={connectGitHub}
+              data-testid='connect-github-button'
+              size='sm'
+            >
+              Connect GitHub App
+            </Button>
+          </div>
+        )}
+
         <div className='flex flex-wrap items-end justify-between gap-2'>
           <div>
             <h2 className='text-2xl font-bold tracking-tight'>
@@ -107,8 +149,7 @@ export function Sources() {
           <div className='flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground'>
             <span>
               Monitor run queued — results appear here within a minute.
-              Sources are discovered from GitHub Actions; the poller needs
-              GITHUB_SOURCE_OWNER and GITHUB_TOKEN set to find any.
+              Sources are discovered from your connected GitHub account.
             </span>
             <button
               onClick={() => setNotice(false)}
@@ -189,16 +230,9 @@ export function Sources() {
                   No monitored sources yet
                 </p>
                 <p className='max-w-md text-sm text-muted-foreground'>
-                  Sources are auto-discovered from GitHub Actions workflows by
-                  the poller (read-only). Set{' '}
-                  <code className='rounded bg-muted px-1 py-0.5 text-xs'>
-                    GITHUB_SOURCE_OWNER
-                  </code>{' '}
-                  and{' '}
-                  <code className='rounded bg-muted px-1 py-0.5 text-xs'>
-                    GITHUB_TOKEN
-                  </code>{' '}
-                  on the poller, then click &quot;Run monitor now&quot;.
+                  Sources are auto-discovered from your GitHub Actions
+                  workflows on each monitor run (read-only). Connect GitHub
+                  above, then click “Run monitor now”.
                 </p>
               </div>
             )}
