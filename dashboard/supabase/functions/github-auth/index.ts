@@ -1,11 +1,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// PROJECT_URL and SERVICE_ROLE_KEY are set as function secrets via the CLI
-// (names starting with SUPABASE_ cannot be set via CLI/dashboard, and
-// SUPABASE_SERVICE_ROLE_KEY is not auto-injected into edge functions).
-const PROJECT_URL = Deno.env.get('PROJECT_URL') ?? Deno.env.get('SUPABASE_URL') ?? ''
-const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+// SUPABASE_URL and SUPABASE_ANON_KEY are auto-injected into edge functions.
+// No service-role secret needed: the install request carries the user's JWT
+// (RLS enforces ownership), and the callback uses security-definer helpers.
+const PROJECT_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID') ?? ''
 const CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET') ?? ''
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://ingestwatch.vokrix.co'
@@ -20,7 +20,9 @@ function html(msg: string): Response {
 async function handleInstall(url: URL): Promise<Response> {
   const jwt = url.searchParams.get('token')
   if (!jwt) return html('Missing auth token. Open this from the dashboard.')
-  const sb = createClient(PROJECT_URL, SERVICE_KEY)
+  const sb = createClient(PROJECT_URL, ANON_KEY, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+  })
   const { data, error } = await sb.auth.getUser(jwt)
   if (error || !data?.user) return html('Invalid session. Sign in and try again.')
   const state = crypto.randomUUID()
@@ -37,14 +39,9 @@ async function handleInstall(url: URL): Promise<Response> {
 }
 
 async function handleCallback(code: string, state: string): Promise<Response> {
-  const sb = createClient(PROJECT_URL, SERVICE_KEY)
-  const { data: st, error: ste } = await sb
-    .from('oauth_states')
-    .select('user_id')
-    .eq('state', state)
-    .maybeSingle()
-  if (ste || !st) return html('Invalid or expired state. Start over from the dashboard.')
-  await sb.from('oauth_states').delete().eq('state', state)
+  const sb = createClient(PROJECT_URL, ANON_KEY)
+  const { data: userId } = await sb.rpc('consume_oauth_state', { p_state: state })
+  if (!userId) return html('Invalid or expired state. Start over from the dashboard.')
 
   const tokResp = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
@@ -74,16 +71,12 @@ async function handleCallback(code: string, state: string): Promise<Response> {
   const gh = await ghResp.json()
   if (!gh.login) return html('Could not load your GitHub profile. Try again.')
 
-  await sb.from('github_connections').upsert(
-    {
-      user_id: st.user_id,
-      github_username: gh.login,
-      access_token: accessToken,
-      avatar_url: gh.avatar_url ?? null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id' }
-  )
+  await sb.rpc('save_github_connection', {
+    p_user_id: userId,
+    p_username: gh.login,
+    p_token: accessToken,
+    p_avatar: gh.avatar_url ?? null,
+  })
   return Response.redirect(`${APP_URL}/sources?connected=1`, 302)
 }
 
