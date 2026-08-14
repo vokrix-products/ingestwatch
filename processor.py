@@ -204,6 +204,26 @@ def _parse_csv(text):
     return _records_from_dicts(rows)
 
 
+
+def _parse_markdown_table(text):
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    if not lines or not all(l.startswith("|") for l in lines[:2]):
+        return []
+    data_lines = []
+    for line in lines:
+        if not line.startswith("|"): continue
+        if re.match(r"^\|[\s:\-|]+\|$", line): continue
+        data_lines.append(line)
+    if len(data_lines) < 2: return []
+    header = [p.strip() for p in data_lines[0].strip().strip("|").split("|")]
+    rows = []
+    for line in data_lines[1:]:
+        cells = [p.strip() for p in line.strip().strip("|").split("|")]
+        row = {header[i]: cells[i] for i in range(min(len(header), len(cells)))}
+        if any(v for v in row.values()): rows.append(row)
+    return _records_from_dicts(rows) if rows else []
+
+
 def _parse_plain_text(text):
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     rows = []
