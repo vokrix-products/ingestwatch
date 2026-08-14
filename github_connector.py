@@ -135,6 +135,10 @@ def discover_sources(owner, token=None, repos=None, days=7):
             errors.append("{}: {}".format(ref, str(exc)[:200]))
     if not rows and errors:
         raise RuntimeError("; ".join(errors[:3]))
+    if not rows and repo_refs:
+        raise RuntimeError(
+            "found {} repos but zero workflows - token may lack Actions read permission".format(len(repo_refs))
+        )
     return rows
 
 

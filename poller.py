@@ -187,6 +187,7 @@ def process_job(job):
             update_job(job_id, {
                 "status": "failed",
                 "result_summary": str(exc)[:500],
+                "error_message": str(exc)[:500],
                 "completed_at": now,
             })
         except Exception:
