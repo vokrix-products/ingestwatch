@@ -96,22 +96,30 @@ def evaluate_source(row):
     error = row.get("error_message") or row.get("error")
 
     status = None
-    # missing: no last run recorded and the next run is due or past
-    if last is None:
-        if next_run is None or next_run <= now:
-            status = "missing:critical"
-    if status is None and status_raw:
-        norm = _normalize_status(status_raw)
-        if norm in ("failed:critical", "missing:critical", "empty:warning", "flagged:warning", "expired:warning"):
-            status = norm
+    # 1. Explicit non-valid status in the manifest wins
+    #    (failed/missing/empty/flagged/expired).
+    norm = _normalize_status(status_raw) if status_raw else None
+    if norm and norm != "valid:good":
+        status = norm
+    # 2. Error message on the run -> failed.
     if status is None and error:
         status = "failed:critical"
+    # 3. Empty run: flagged empty or zero records fetched.
     if status is None and (empty_flag or (fetched is not None and fetched == 0)):
         status = "empty:warning"
+    # 4. Reported counts are positive evidence the source ran fine.
+    if status is None and fetched is not None and fetched > 0:
+        status = "valid:good"
+    # 5. No last run and the next run is due (or unknown) -> missing.
+    if status is None and last is None:
+        if next_run is None or next_run <= now:
+            status = "missing:critical"
+    # 6. Last run older than twice the expected interval -> expired.
     if status is None and last is not None:
         interval = _schedule_interval_hours(row.get("schedule"))
         if now - last > timedelta(hours=interval * 2):
             status = "expired:warning"
+    # 7. Otherwise healthy.
     if status is None:
         status = "valid:good"
 
