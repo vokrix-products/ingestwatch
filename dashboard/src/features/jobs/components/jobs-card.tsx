@@ -136,7 +136,13 @@ function FullscreenDropOverlay({ onDrop }: { onDrop: (files: File[]) => void }) 
   )
 }
 
-const SHOW_UPLOAD = PRODUCT_ARCHETYPE === 'extraction' || PRODUCT_ARCHETYPE === 'report'
+// IngestWatch is a poller: users upload a source manifest (JSON/CSV) or raw
+// operational file and get normalized monitoring records back, so the upload
+// surface must be present for extraction, report, AND monitor archetypes.
+const SHOW_UPLOAD =
+  PRODUCT_ARCHETYPE === 'extraction' ||
+  PRODUCT_ARCHETYPE === 'report' ||
+  PRODUCT_ARCHETYPE === 'monitor'
 const MULTI_FILE = false
 
 export function JobsCard() {
@@ -276,6 +282,7 @@ export function JobsCard() {
               ref={inputRef}
               type='file'
               multiple={MULTI_FILE}
+              data-testid='file-input'
               className='absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0'
               onChange={handleFileChange}
             />
