@@ -37,6 +37,10 @@ async function handleInstall(url: URL): Promise<Response> {
     // repo scope lets the poller read private-repo Actions runs, which is
     // required to monitor ingestion workflows that are not public.
     scope: 'repo',
+    // Always show the account picker so "Re-connect / switch account"
+    // actually lets the user choose an account / re-approve permissions
+    // instead of GitHub silently re-authorizing with no visible prompt.
+    prompt: 'select_account',
   })
   return Response.redirect(`https://github.com/login/oauth/authorize?${params}`, 302)
 }
