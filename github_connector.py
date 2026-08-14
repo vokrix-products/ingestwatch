@@ -29,7 +29,7 @@ def list_repos(owner, token, per_page=100):
         url = "{}/users/{}/repos".format(API, owner)
         resp = requests.get(url, headers=_headers(token), params={"per_page": per_page, "sort": "updated"}, timeout=30)
     if resp.status_code != 200:
-        return []
+        raise RuntimeError("GitHub API {} {}: {}".format(resp.status_code, url, resp.text[:300]))
     return [r.get("name") for r in resp.json() if r.get("name")]
 
 
@@ -41,7 +41,7 @@ def workflows(owner, repo, token):
     except Exception:
         return []
     if resp.status_code != 200:
-        return []
+        raise RuntimeError("GitHub API {} {}: {}".format(resp.status_code, url, resp.text[:300]))
     return resp.json().get("workflows", []) or []
 
 
@@ -53,7 +53,7 @@ def workflow_latest_run(owner, repo, workflow_id, token):
     except Exception:
         return None
     if resp.status_code != 200:
-        return None
+        raise RuntimeError("GitHub API {} {}: {}".format(resp.status_code, url, resp.text[:300]))
     runs = resp.json().get("workflow_runs", []) or []
     return runs[0] if runs else None
 

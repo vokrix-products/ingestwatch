@@ -107,8 +107,8 @@ def github_manifest(owner=None, token=None):
         if not rows:
             return None
         return json.dumps({"sources": rows})
-    except Exception:
-        return None
+    except Exception as exc:
+        raise RuntimeError("github_connector error: {}".format(exc)) from exc
 
 
 def _insert_records(results, customer_id, input_path):
