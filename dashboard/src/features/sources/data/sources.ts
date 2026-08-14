@@ -99,7 +99,28 @@ export function useSources() {
   })
 }
 
+const TRIAL_LIMIT = 3
+
+async function countMonitorRuns(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('jobs')
+    .select('*', { count: 'exact', head: true })
+    .eq('product_id', PRODUCT_ID)
+    .eq('customer_id', userId)
+    .eq('job_type', 'process_sources')
+    .in('status', ['pending', 'processing', 'completed'])
+  if (error) throw error
+  return count ?? 0
+}
+
 async function runMonitor(userId: string): Promise<void> {
+  const { data } = await supabase.auth.getSession()
+  const meta = (data.session?.user?.app_metadata ?? {}) as Record<string, unknown>
+  const userProductId = meta.product_id ?? ''
+  if (String(userProductId) !== import.meta.env.VITE_PRODUCT_ID) {
+    const used = await countMonitorRuns(userId)
+    if (used >= TRIAL_LIMIT) throw new Error('TRIAL_LIMIT_REACHED')
+  }
   const { error } = await supabase.from('jobs').insert({
     product_id: PRODUCT_ID,
     customer_id: userId,
@@ -121,6 +142,11 @@ export function useRunMonitor() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jobs', PRODUCT_ID] })
+    },
+    onError: (err) => {
+      if (err instanceof Error && err.message === 'TRIAL_LIMIT_REACHED') {
+        window.dispatchEvent(new CustomEvent('open-paywall'))
+      }
     },
   })
 }

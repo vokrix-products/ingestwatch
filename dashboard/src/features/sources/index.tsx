@@ -8,6 +8,15 @@ import { NotificationsBell } from '@/components/notifications-bell'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Card,
   CardContent,
   CardHeader,
@@ -59,8 +68,9 @@ export function Sources() {
     if (params.get('connected') === '1') {
       window.history.replaceState({}, '', window.location.pathname)
       setJustConnected(true)
+      void runMonitor.mutateAsync()
     }
-  }, [])
+  }, [runMonitor])
 
   const counts = useMemo(() => {
     const rows = sources ?? []
@@ -73,6 +83,14 @@ export function Sources() {
     ).length
     return { total: rows.length, attention, critical }
   }, [sources])
+
+  const [paywallOpen, setPaywallOpen] = useState(false)
+
+  useEffect(() => {
+    const open = () => setPaywallOpen(true)
+    window.addEventListener('open-paywall', open)
+    return () => window.removeEventListener('open-paywall', open)
+  }, [])
 
   async function handleRun() {
     try {
@@ -315,6 +333,34 @@ export function Sources() {
               )}
           </CardContent>
         </Card>
+        <Dialog open={paywallOpen} onOpenChange={setPaywallOpen}>
+          <DialogContent className='gap-2 sm:max-w-sm'>
+            <DialogHeader className='text-start'>
+              <DialogTitle>
+                {import.meta.env.VITE_PAYWALL_TITLE ??
+                  'You have used your 3 free Sources'}
+              </DialogTitle>
+              <DialogDescription>
+                Upgrade to get unlimited monitoring, instant run updates, and
+                full access to IngestWatch.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className='gap-2'>
+              <DialogClose asChild>
+                <Button variant='outline'>Not now</Button>
+              </DialogClose>
+              <Button
+                onClick={() => {
+                  window.location.href =
+                    import.meta.env.VITE_STRIPE_CHECKOUT_URL ??
+                    'https://checkout.stripe.com/c/pay/cs_live_a1wy2GPxBsc8qE54nOWGSPbXb9IpKBtBRYByKz'
+                }}
+              >
+                Upgrade — $49/month
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Main>
     </>
   )
