@@ -1,12 +1,12 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
-const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const PROJECT_URL = Deno.env.get('PROJECT_URL') ?? ''
+const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
 const CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID') ?? ''
 const CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET') ?? ''
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://ingestwatch.vokrix.co'
-const REDIRECT_URI = `${SUPABASE_URL}/functions/v1/github-auth`
+const REDIRECT_URI = `${PROJECT_URL}/functions/v1/github-auth`
 
 function html(msg: string): Response {
   return new Response(`<!doctype html><html><body style="font-family:system-ui;padding:2rem">${msg}</body></html>`, {
@@ -17,7 +17,7 @@ function html(msg: string): Response {
 async function handleInstall(url: URL): Promise<Response> {
   const jwt = url.searchParams.get('token')
   if (!jwt) return html('Missing auth token. Open this from the dashboard.')
-  const sb = createClient(SUPABASE_URL, SERVICE_KEY)
+  const sb = createClient(PROJECT_URL, SERVICE_KEY)
   const { data, error } = await sb.auth.getUser(jwt)
   if (error || !data?.user) return html('Invalid session. Sign in and try again.')
   const state = crypto.randomUUID()
@@ -34,7 +34,7 @@ async function handleInstall(url: URL): Promise<Response> {
 }
 
 async function handleCallback(code: string, state: string): Promise<Response> {
-  const sb = createClient(SUPABASE_URL, SERVICE_KEY)
+  const sb = createClient(PROJECT_URL, SERVICE_KEY)
   const { data: st, error: ste } = await sb
     .from('oauth_states')
     .select('user_id')
