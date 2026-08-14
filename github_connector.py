@@ -1,12 +1,13 @@
 """Read-only GitHub Actions connector.
 
-Discovers scheduled ingestion workflows and their recent runs via the
-GitHub REST API (read-only, no write access required) and returns a source
-manifest consumable by monitor.process_sources.
+Discovers scheduled ingestion workflows and their runs via the GitHub REST
+API (read-only, no write access required) and returns a source manifest
+consumable by monitor.process_sources. Every workflow defined in a repo
+becomes a source, so scheduled jobs that have never run still surface as
+missing:critical instead of being silently dropped.
 """
 import json
 import os
-from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -32,73 +33,87 @@ def list_repos(owner, token, per_page=100):
     return [r.get("name") for r in resp.json() if r.get("name")]
 
 
-def workflow_runs(owner, repo, token, days=7):
-    """Recent workflow runs for one repo, newest first."""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    url = "{}/repos/{}/{}/actions/runs".format(API, owner, repo)
+def workflows(owner, repo, token):
+    """All Actions workflows defined in a repo (.github/workflows/*.yml)."""
+    url = "{}/repos/{}/{}/actions/workflows".format(API, owner, repo)
     try:
         resp = requests.get(url, headers=_headers(token), params={"per_page": 100}, timeout=30)
     except Exception:
         return []
     if resp.status_code != 200:
         return []
-    out = []
-    for run in resp.json().get("workflow_runs", []) or []:
-        created = run.get("created_at")
-        if created and created < since:
-            continue
-        out.append(run)
-    return out
+    return resp.json().get("workflows", []) or []
 
 
-def _map_run(run, owner, repo):
-    workflow_id = run.get("workflow_id") or run.get("name") or "workflow"
-    conclusion = run.get("conclusion")
-    status_raw = run.get("status")
-    if conclusion == "success":
+def workflow_latest_run(owner, repo, workflow_id, token):
+    """Newest run for a workflow, or None if it has never run."""
+    url = "{}/repos/{}/{}/actions/workflows/{}/runs".format(API, owner, repo, workflow_id)
+    try:
+        resp = requests.get(url, headers=_headers(token), params={"per_page": 1}, timeout=30)
+    except Exception:
+        return None
+    if resp.status_code != 200:
+        return None
+    runs = resp.json().get("workflow_runs", []) or []
+    return runs[0] if runs else None
+
+
+def _map_workflow(workflow, run, owner, repo):
+    name = workflow.get("name") or workflow.get("path") or "workflow"
+    run_id = run_url = created = None
+    conclusion = None
+    if run:
+        run_id = run.get("id")
+        run_url = run.get("html_url")
+        created = run.get("created_at") or run.get("updated_at")
+        conclusion = run.get("conclusion")
+    if not run:
+        mapped = "missing"
+    elif conclusion == "success":
         mapped = "success"
-    elif conclusion == "failure":
-        mapped = "failed"
-    elif conclusion in ("cancelled", "timed_out", "action_required", "startup_failure"):
+    elif conclusion in ("failure", "cancelled", "timed_out", "action_required", "startup_failure"):
         mapped = "failed"
     elif conclusion:
         mapped = conclusion
     else:
-        mapped = status_raw or "unknown"
+        mapped = run.get("status") or "unknown"
     is_failure = mapped == "failed"
     return {
-        "source_name": "{}/{}".format(repo, workflow_id),
+        "source_name": "{}/{}".format(repo, name),
         "source_type": "github_actions",
-        "source_url": run.get("html_url"),
+        "source_url": workflow.get("html_url"),
         "repo_owner": owner,
         "repo_name": repo,
-        "workflow_id": str(workflow_id),
-        "run_id": run.get("id"),
-        "run_url": run.get("html_url"),
-        "last_run_at": run.get("created_at") or run.get("updated_at"),
+        "workflow_id": str(workflow.get("id")),
+        "run_id": run_id,
+        "run_url": run_url,
+        "last_run_at": created,
         "status": mapped,
         "error_message": conclusion if is_failure else None,
+        "alert_reason": "Workflow has never run" if not run else None,
+        "empty_run": not run,
+        "schedule": None,
+        "workflow_path": workflow.get("path"),
     }
 
 
 def discover_sources(owner, token=None, repos=None, days=7):
-    """Return manifest rows (one per source, latest run) for the given repos."""
+    """Return manifest rows (one per workflow source) for the given repos.
+
+    Every workflow defined in a repo becomes a source, so scheduled jobs
+    that have never run still surface as missing:critical instead of
+    being silently dropped.
+    """
     token = token or os.environ.get("GITHUB_TOKEN")
     if not token:
         return []
     repo_names = repos or list_repos(owner, token)
     rows = []
     for repo in repo_names:
-        for run in workflow_runs(owner, repo, token, days):
-            rows.append(_map_run(run, owner, repo))
-    unique = []
-    seen = set()
-    for row in rows:
-        key = row["source_name"]
-        if key not in seen:
-            seen.add(key)
-            unique.append(row)
-    return unique
+        for wf in workflows(owner, repo, token):
+            run = workflow_latest_run(owner, repo, wf.get("id"), token)
+            rows.append(_map_workflow(wf, run, owner, repo))
+    return rows
 
 
 def build_manifest(owner, token=None, repos=None, days=7):

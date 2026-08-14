@@ -34,6 +34,9 @@ async function handleInstall(url: URL): Promise<Response> {
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     state,
+    // repo scope lets the poller read private-repo Actions runs, which is
+    // required to monitor ingestion workflows that are not public.
+    scope: 'repo',
   })
   return Response.redirect(`https://github.com/login/oauth/authorize?${params}`, 302)
 }
