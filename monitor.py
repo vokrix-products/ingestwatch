@@ -162,8 +162,8 @@ def evaluate_source(row):
 
 
 def process_sources(manifest):
-    """Accept a JSON/CSV source manifest (str, bytes, or list) and return
-    normalized monitoring records."""
+    """Accept a source manifest as JSON string, bytes, dict, or list and
+    return normalized monitoring records."""
     if isinstance(manifest, bytes):
         try:
             manifest = manifest.decode("utf-8-sig")
@@ -184,6 +184,10 @@ def process_sources(manifest):
         else:
             reader = csv.DictReader(io.StringIO(text))
             rows = [row for row in reader if row and any((v or "").strip() for v in row.values())]
+    elif isinstance(manifest, dict):
+        rows = manifest.get("sources", [])
+        if isinstance(rows, dict):
+            rows = [rows]
     elif isinstance(manifest, list):
         rows = manifest
     else:
