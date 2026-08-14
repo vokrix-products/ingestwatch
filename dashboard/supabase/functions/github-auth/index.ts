@@ -74,7 +74,7 @@ async function handleCallback(code: string, state: string): Promise<Response> {
   await sb.from('github_connections').upsert(
     {
       user_id: st.user_id,
-      username: gh.login,
+      github_username: gh.login,
       access_token: accessToken,
       avatar_url: gh.avatar_url ?? null,
       updated_at: new Date().toISOString(),
