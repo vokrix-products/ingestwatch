@@ -1,8 +1,10 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const PROJECT_URL = Deno.env.get('PROJECT_URL') ?? ''
-const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+// SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected by the platform
+// for every edge function; no manual secret-set required.
+const PROJECT_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 const CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID') ?? ''
 const CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET') ?? ''
 const APP_URL = Deno.env.get('APP_URL') ?? 'https://ingestwatch.vokrix.co'
