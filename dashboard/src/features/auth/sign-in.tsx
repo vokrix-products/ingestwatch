@@ -37,17 +37,13 @@ export function SignIn() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    const { error: verifyError } = await supabase.auth.verifyOtp({
       email,
       token: code,
       type: 'email',
     })
     setLoading(false)
-    if (verifyError || !data.session) { setError('Invalid code. Please try again.'); return }
-    await supabase.auth.setSession({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    })
+    if (verifyError) { setError('Invalid code. Please try again.'); return }
     window.location.href = '/'
   }
 
