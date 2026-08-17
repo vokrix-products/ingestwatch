@@ -99,6 +99,31 @@ export function Sources() {
     } catch {}
   }
 
+  async function startCheckout() {
+    try {
+      const res = await fetch(
+        'https://web-production-6adc6.up.railway.app/create-checkout-session',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            price_id:
+              import.meta.env.VITE_STRIPE_PRICE_ID ??
+              'price_1U5Pr72c9uGCcgMSCw8o7Dht',
+            product_id: 'ingestwatch',
+            success_url: window.location.origin,
+            cancel_url: window.location.href,
+          }),
+        },
+      )
+      const data = (await res.json()) as { checkout_url?: string }
+      if (data.checkout_url) window.location.href = data.checkout_url
+      else window.location.href = 'https://buy.stripe.com/bJeaEQ4ke4LfbXn8uLefC00'
+    } catch {
+      window.location.href = 'https://buy.stripe.com/bJeaEQ4ke4LfbXn8uLefC00'
+    }
+  }
+
   return (
     <>
       <Header fixed>
@@ -351,9 +376,7 @@ export function Sources() {
               </DialogClose>
               <Button
                 onClick={() => {
-                  window.location.href =
-                    import.meta.env.VITE_STRIPE_CHECKOUT_URL ??
-                    'https://checkout.stripe.com/c/pay/cs_live_a1wy2GPxBsc8qE54nOWGSPbXb9IpKBtBRYByKz'
+                  void startCheckout()
                 }}
               >
                 Upgrade — $49/month

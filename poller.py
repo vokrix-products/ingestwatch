@@ -148,9 +148,19 @@ def _is_paid(customer_id):
     try:
         url = f"{SUPABASE_REST}/subscriptions?customer_id=eq.{customer_id}&product_id=eq.{PRODUCT_ID}&status=eq.active&select=id"
         resp = requests.get(url, headers=get_headers(), timeout=30)
-        return resp.status_code == 200 and bool(resp.json())
+        if resp.status_code == 200 and resp.json():
+            return True
     except Exception:
-        return False
+        pass
+    try:
+        url = f"{SUPABASE_URL}/auth/v1/admin/users/{customer_id}"
+        resp = requests.get(url, headers=get_headers(), timeout=30)
+        if resp.status_code == 200:
+            meta = resp.json().get("app_metadata") or {}
+            return str(meta.get("product_id") or "") == PRODUCT_ID
+    except Exception:
+        pass
+    return False
 
 
 def _monitor_run_count(customer_id):
