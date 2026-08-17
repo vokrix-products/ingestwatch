@@ -174,6 +174,38 @@ def _monitor_run_count(customer_id):
     return 0
 
 
+AUTO_SCAN_INTERVAL_MINUTES = int(os.environ.get("AUTO_SCAN_INTERVAL_MINUTES", "15"))
+
+
+def _auto_enqueue_monitor_runs():
+    """Auto-queue a monitor run per paid connected user (continuous monitoring)."""
+    try:
+        url = f"{SUPABASE_REST}/github_connections?select=user_id"
+        resp = requests.get(url, headers=get_headers(), timeout=30)
+        if resp.status_code != 200:
+            return
+        user_ids = sorted({r["user_id"] for r in resp.json() if r.get("user_id")})
+        for uid in user_ids:
+            if not _is_paid(uid):
+                continue
+            try:
+                q = f"{SUPABASE_REST}/jobs?product_id=eq.{PRODUCT_ID}&customer_id=eq.{uid}&job_type=eq.process_sources&status=in.(pending,processing)&select=id"
+                r = requests.get(q, headers=get_headers(), timeout=30)
+                if r.status_code == 200 and r.json():
+                    continue
+            except Exception:
+                continue
+            payload = {
+                "product_id": PRODUCT_ID,
+                "customer_id": uid,
+                "job_type": "process_sources",
+                "status": "pending",
+            }
+            requests.post(f"{SUPABASE_REST}/jobs", headers=get_headers(), json=payload, timeout=30)
+    except Exception:
+        pass
+
+
 def process_job(job):
     job_id = job.get("id")
     customer_id = job.get("customer_id")
@@ -257,6 +289,7 @@ def process_job(job):
 
 
 def poll():
+    last_auto_scan = 0.0
     while True:
         try:
             jobs_url = f"{SUPABASE_REST}/jobs"
@@ -274,6 +307,9 @@ def poll():
                 process_job(job)
         except Exception:
             pass
+        if time.time() - last_auto_scan >= AUTO_SCAN_INTERVAL_MINUTES * 60:
+            _auto_enqueue_monitor_runs()
+            last_auto_scan = time.time()
         time.sleep(POLL_INTERVAL_SECONDS)
 
 
