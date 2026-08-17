@@ -367,7 +367,7 @@ export function Sources() {
                   void startCheckout()
                 }}
               >
-                Upgrade — $49/month
+                Upgrade — $29/month
               </Button>
             </DialogFooter>
           </DialogContent>
