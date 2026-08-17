@@ -109,7 +109,7 @@ export function Sources() {
           body: JSON.stringify({
             price_id:
               import.meta.env.VITE_STRIPE_PRICE_ID ??
-              'price_1U5Pr72c9uGCcgMSCw8o7Dht',
+              'price_1U5T452c9uGCcgMSSfmNJuhR',
             product_id: 'ingestwatch',
             success_url: window.location.origin,
             cancel_url: window.location.href,
@@ -118,9 +118,9 @@ export function Sources() {
       )
       const data = (await res.json()) as { checkout_url?: string }
       if (data.checkout_url) window.location.href = data.checkout_url
-      else window.location.href = 'https://buy.stripe.com/bJeaEQ4ke4LfbXn8uLefC00'
+      else window.location.href = 'https://buy.stripe.com/9B65kw5oia5z8LbcL1efC01'
     } catch {
-      window.location.href = 'https://buy.stripe.com/bJeaEQ4ke4LfbXn8uLefC00'
+      window.location.href = 'https://buy.stripe.com/9B65kw5oia5z8LbcL1efC01'
     }
   }
 
