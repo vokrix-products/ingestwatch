@@ -301,9 +301,6 @@ export function Sources() {
                       <TableHead>Source</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Last Run</TableHead>
-                      <TableHead className='text-right'>Fetched</TableHead>
-                      <TableHead className='text-right'>Scored</TableHead>
-                      <TableHead className='text-right'>Qualified</TableHead>
                       <TableHead>Alert</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -322,15 +319,6 @@ export function Sources() {
                         </TableCell>
                         <TableCell>{statusBadge(s.status)}</TableCell>
                         <TableCell>{formatTime(s.lastRunAt)}</TableCell>
-                        <TableCell className='text-right'>
-                          {s.fetched ?? '—'}
-                        </TableCell>
-                        <TableCell className='text-right'>
-                          {s.scored ?? '—'}
-                        </TableCell>
-                        <TableCell className='text-right'>
-                          {s.qualified ?? '—'}
-                        </TableCell>
                         <TableCell>
                           {s.alertReason ? (
                             <span className='text-xs text-muted-foreground'>
