@@ -139,6 +139,31 @@ def _upsert_source_records(results, customer_id):
     _insert_records(results, customer_id, input_path)
 
 
+TRIAL_LIMIT = int(os.environ.get("TRIAL_RUN_LIMIT", "3"))
+
+
+def _is_paid(customer_id):
+    if not customer_id:
+        return True
+    try:
+        url = f"{SUPABASE_REST}/subscriptions?customer_id=eq.{customer_id}&product_id=eq.{PRODUCT_ID}&status=eq.active&select=id"
+        resp = requests.get(url, headers=get_headers(), timeout=30)
+        return resp.status_code == 200 and bool(resp.json())
+    except Exception:
+        return False
+
+
+def _monitor_run_count(customer_id):
+    try:
+        url = f"{SUPABASE_REST}/jobs?product_id=eq.{PRODUCT_ID}&customer_id=eq.{customer_id}&job_type=eq.process_sources&select=id"
+        resp = requests.get(url, headers=get_headers(), timeout=30)
+        if resp.status_code == 200:
+            return len(resp.json())
+    except Exception:
+        pass
+    return 0
+
+
 def process_job(job):
     job_id = job.get("id")
     customer_id = job.get("customer_id")
@@ -152,6 +177,8 @@ def process_job(job):
             except Exception:
                 file_bytes = b""
         if job_type == "process_sources":
+            if not _is_paid(customer_id) and _monitor_run_count(customer_id) >= TRIAL_LIMIT:
+                raise ValueError(f"Free trial limit reached ({TRIAL_LIMIT} runs). Upgrade to continue monitoring.")
             manifest_text = file_bytes.decode("utf-8-sig", "replace").strip() if file_bytes else ""
             if not manifest_text:
                 conn = get_github_connection(customer_id)
