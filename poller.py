@@ -118,6 +118,27 @@ def _insert_records(results, customer_id, input_path):
     resp.raise_for_status()
 
 
+def _upsert_source_records(results, customer_id):
+    """Insert source records, replacing previous rows with the same workflow_id for this customer."""
+    workflow_ids = [r.get("details", {}).get("workflow_id") for r in results]
+    workflow_ids = [w for w in workflow_ids if w]
+    if workflow_ids:
+        try:
+            url = f"{SUPABASE_REST}/records?product_id=eq.{PRODUCT_ID}&customer_id=eq.{customer_id}&select=id,details"
+            resp = requests.get(url, headers=get_headers(), timeout=30)
+            if resp.status_code == 200:
+                stale = [
+                    r["id"] for r in resp.json()
+                    if (r.get("details") or {}).get("workflow_id") in workflow_ids
+                ]
+                if stale:
+                    del_url = f"{SUPABASE_REST}/records?id=in.({','.join(str(i) for i in stale)})"
+                    requests.delete(del_url, headers=get_headers(), timeout=30)
+        except Exception:
+            pass
+    _insert_records(results, customer_id, input_path)
+
+
 def process_job(job):
     job_id = job.get("id")
     customer_id = job.get("customer_id")
@@ -165,7 +186,10 @@ def process_job(job):
             if rec.get("due_date"):
                 row["due_date"] = rec["due_date"]
             results.append(row)
-        _insert_records(results, customer_id, input_path)
+        if job_type == "process_sources":
+            _upsert_source_records(results, customer_id)
+        else:
+            _insert_records(results, customer_id, input_path)
         result_bytes = json.dumps(results, indent=2).encode("utf-8")
         output_path = upload_result(job_id, result_bytes, "result.json")
         now = datetime.now(timezone.utc).isoformat()
