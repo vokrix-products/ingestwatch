@@ -99,7 +99,9 @@ export function useSources() {
   })
 }
 
-const TRIAL_LIMIT = 3
+// Set VITE_TRIAL_LIMIT to a positive number to enable the paywall.
+// 0 (default) = unlimited / free for now.
+const TRIAL_LIMIT = Number(import.meta.env.VITE_TRIAL_LIMIT ?? '0')
 
 async function countMonitorRuns(userId: string): Promise<number> {
   const { count, error } = await supabase
@@ -117,7 +119,7 @@ async function runMonitor(userId: string): Promise<void> {
   const { data } = await supabase.auth.getSession()
   const meta = (data.session?.user?.app_metadata ?? {}) as Record<string, unknown>
   const userProductId = meta.product_id ?? ''
-  if (String(userProductId) !== import.meta.env.VITE_PRODUCT_ID) {
+  if (TRIAL_LIMIT > 0 && String(userProductId) !== import.meta.env.VITE_PRODUCT_ID) {
     const used = await countMonitorRuns(userId)
     if (used >= TRIAL_LIMIT) throw new Error('TRIAL_LIMIT_REACHED')
   }
