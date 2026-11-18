@@ -60,7 +60,7 @@ function PaywallModal({ open, onClose }: { open: boolean; onClose: () => void })
         </DialogHeader>
         <div className='space-y-4 pt-2'>
           <p className='text-sm text-muted-foreground'>
-            $49/month — cancel anytime.
+            $29/month — cancel anytime.
           </p>
           <Button className='w-full' onClick={openCheckout} data-testid="paywall-upgrade-button">
             Upgrade now
