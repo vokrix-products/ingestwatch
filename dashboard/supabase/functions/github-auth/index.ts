@@ -79,11 +79,21 @@ async function handleCallback(code: string, state: string): Promise<Response> {
   const gh = await ghResp.json()
   if (!gh.login) return html('Could not load your GitHub profile. Try again.')
 
+  const expiresAt = tok.expires_in
+    ? new Date(Date.now() + tok.expires_in * 1000).toISOString()
+    : null
+  const refreshExpiresAt = tok.refresh_token_expires_in
+    ? new Date(Date.now() + tok.refresh_token_expires_in * 1000).toISOString()
+    : null
+
   await sb.rpc('save_github_connection', {
     p_user_id: userId,
     p_username: gh.login,
     p_token: accessToken,
     p_avatar: gh.avatar_url ?? null,
+    p_refresh_token: tok.refresh_token ?? null,
+    p_expires_at: expiresAt,
+    p_refresh_expires_at: refreshExpiresAt,
   })
   return Response.redirect(`${APP_URL}/sources?connected=1`, 302)
 }
