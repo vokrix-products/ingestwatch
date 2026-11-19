@@ -4,6 +4,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const PROJECT_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_KEY = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
 const WEBHOOK_SECRET = Deno.env.get('GITHUB_WEBHOOK_SECRET') ?? ''
+const DEFAULT_PRODUCT_ID = 'ingestwatch'
 
 async function verify(req: Request, raw: string): Promise<boolean> {
   if (!WEBHOOK_SECRET) return false
@@ -23,8 +24,12 @@ serve(async (req) => {
   try { payload = JSON.parse(raw) } catch { return new Response('bad json', { status: 400 }) }
   const owner = payload?.repository?.owner?.login
   if (!owner) return new Response('no owner', { status: 200 })
+  const productId = new URL(req.url).searchParams.get('product') ?? DEFAULT_PRODUCT_ID
   const sb = createClient(PROJECT_URL, SERVICE_KEY)
-  const { data, error } = await sb.rpc('enqueue_monitor_run', { p_repo_owner: owner })
+  const { data, error } = await sb.rpc('enqueue_monitor_run', {
+    p_repo_owner: owner,
+    p_product_id: productId,
+  })
   if (error) return new Response(error.message, { status: 500 })
   return new Response(`queued ${data ?? 0}`, { status: 200 })
 })
